@@ -1923,12 +1923,7 @@
       finished: false
     };
 
-    // Camera views offset configurations
-    const cameraOffsets = [
-      { pos: new THREE.Vector3(0.35, 2.2, 4.6), look: new THREE.Vector3(0.0, 1.15, -7.5) }, // Classic Third-Person (from photo)
-      { pos: new THREE.Vector3(0, 1.8, 3.0), look: new THREE.Vector3(0, 1.05, -8) },        // Close Action
-      { pos: new THREE.Vector3(0, 1.35, 0.4), look: new THREE.Vector3(0, 1.15, -12) }       // Handlebar View
-    ];
+
 
     // --- INPUT CONTROLS SYSTEM ---
     const keys = {
@@ -2007,12 +2002,26 @@
       }
     });
 
-    // Start Screen
-    document.getElementById('start-btn').addEventListener('click', () => {
-      sound.init();
+    // Start Screen with Mobile Touch & Keyboard Support
+    function startGame() {
+      if (gameState.started) return;
+      try { sound.init(); } catch (e) { console.warn(e); }
       gameState.started = true;
-      document.getElementById('start-screen').style.display = 'none';
-      showToast('🚴 انطلق! سلّم الجرائد للمنازل');
+      const screen = document.getElementById('start-screen');
+      if (screen) screen.style.display = 'none';
+      showToast('🚴 انطلق! فز بالسباق وسلّم الجرائد');
+    }
+
+    const startBtn = document.getElementById('start-btn');
+    if (startBtn) {
+      startBtn.addEventListener('click', startGame);
+      startBtn.addEventListener('touchend', (e) => { e.preventDefault(); startGame(); });
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (!gameState.started && (e.code === 'Space' || e.code === 'Enter')) {
+        startGame();
+      }
     });
 
     // Action Triggers

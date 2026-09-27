@@ -1,0 +1,1817 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>جولة الدراجة في الضاحية | Cozy Downhill Bike</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #7ec0ee;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* HUD overlay */
+    #hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
+      pointer-events: auto;
+    }
+
+    .hud-card {
+      background: rgba(18, 28, 38, 0.65);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 18px;
+      padding: 10px 16px;
+      color: #fff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Speedometer */
+    .speedo-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 100px;
+    }
+    .speedo-val {
+      font-size: 28px;
+      font-weight: 800;
+      color: #ffeb3b;
+      line-height: 1;
+      text-shadow: 0 0 10px rgba(255, 235, 59, 0.5);
+    }
+    .speedo-unit {
+      font-size: 11px;
+      color: #e0e0e0;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+    .dist-val {
+      font-size: 11px;
+      color: #81d4fa;
+      margin-top: 4px;
+    }
+
+    /* Score & Stats */
+    .stats-box {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .stat-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .stat-icon {
+      font-size: 18px;
+    }
+
+    .top-buttons {
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    .btn-icon {
+      background: rgba(18, 28, 38, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: all 0.15s ease;
+      touch-action: manipulation;
+    }
+    .btn-icon:active {
+      transform: scale(0.92);
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Mini map */
+    .bottom-left-hud {
+      position: absolute;
+      bottom: 24px;
+      left: 20px;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    #minimap {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.4);
+      background: rgba(25, 40, 50, 0.85);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    }
+    .minimap-label {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.85);
+      font-weight: 600;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    /* Notification message */
+    #toast {
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: rgba(10, 20, 30, 0.85);
+      border: 1px solid #ffca28;
+      color: #fff;
+      padding: 8px 20px;
+      border-radius: 30px;
+      font-size: 15px;
+      font-weight: bold;
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      pointer-events: none;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Mobile Controls */
+    #mobile-controls {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 0 24px;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    /* Left steering buttons / stick */
+    .controls-left {
+      pointer-events: auto;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+    .steer-btn {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: rgba(25, 45, 65, 0.7);
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      color: white;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+      touch-action: none;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+      transition: transform 0.08s, background 0.08s;
+    }
+    .steer-btn:active, .steer-btn.active {
+      transform: scale(0.9);
+      background: rgba(0, 168, 255, 0.6);
+      border-color: #00d2d3;
+    }
+
+    /* Right action buttons */
+    .controls-right {
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: flex-end;
+    }
+    .right-btn-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .act-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      border-radius: 50%;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+      touch-action: none;
+      transition: transform 0.08s, filter 0.08s;
+      cursor: pointer;
+    }
+    .act-btn:active, .act-btn.active {
+      transform: scale(0.92);
+      filter: brightness(1.2);
+    }
+
+    /* Specific action button styles */
+    .btn-pedal {
+      width: 78px;
+      height: 78px;
+      background: radial-gradient(circle, #2ecc71 0%, #27ae60 100%);
+      border: 3px solid rgba(255,255,255,0.6);
+    }
+    .btn-pedal .icon { font-size: 30px; }
+    .btn-pedal .lbl { font-size: 11px; font-weight: 700; margin-top: 1px; }
+
+    .btn-brake {
+      width: 62px;
+      height: 62px;
+      background: radial-gradient(circle, #e74c3c 0%, #c0392b 100%);
+      border: 2px solid rgba(255,255,255,0.5);
+    }
+    .btn-brake .icon { font-size: 24px; }
+    .btn-brake .lbl { font-size: 10px; font-weight: 700; }
+
+    .btn-throw {
+      width: 58px;
+      height: 58px;
+      background: radial-gradient(circle, #f39c12 0%, #d35400 100%);
+      border: 2px solid rgba(255,255,255,0.5);
+    }
+    .btn-throw .icon { font-size: 22px; }
+    .btn-throw .lbl { font-size: 9px; font-weight: 700; }
+
+    .btn-bell {
+      width: 52px;
+      height: 52px;
+      background: radial-gradient(circle, #9b59b6 0%, #8e44ad 100%);
+      border: 2px solid rgba(255,255,255,0.5);
+    }
+    .btn-bell .icon { font-size: 20px; }
+    .btn-bell .lbl { font-size: 9px; font-weight: 700; }
+
+    .btn-jump {
+      width: 52px;
+      height: 52px;
+      background: radial-gradient(circle, #3498db 0%, #2980b9 100%);
+      border: 2px solid rgba(255,255,255,0.5);
+    }
+    .btn-jump .icon { font-size: 20px; }
+    .btn-jump .lbl { font-size: 9px; font-weight: 700; }
+
+    /* Modal dialog */
+    .modal-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(6px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card {
+      background: #1e293b;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 24px;
+      padding: 24px;
+      width: 90%;
+      max-width: 420px;
+      color: white;
+      text-align: center;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+    }
+    .modal-title {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      color: #f1c40f;
+    }
+    .modal-desc {
+      font-size: 14px;
+      color: #94a3b8;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .modal-btn {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 30px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    }
+    .modal-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* Start Screen */
+    #start-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, rgba(14, 165, 233, 0.4) 0%, rgba(15, 23, 42, 0.85) 100%);
+      z-index: 90;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: white;
+      text-align: center;
+    }
+    .game-logo {
+      font-size: 34px;
+      font-weight: 900;
+      color: #fef08a;
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+      margin-bottom: 8px;
+    }
+    .game-tagline {
+      font-size: 16px;
+      color: #e2e8f0;
+      margin-bottom: 24px;
+      max-width: 340px;
+    }
+    .instructions-box {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      max-width: 360px;
+      text-align: right;
+      font-size: 13px;
+      line-height: 1.8;
+      color: #f8fafc;
+    }
+    .start-btn {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+      font-size: 20px;
+      font-weight: 800;
+      border: none;
+      padding: 14px 48px;
+      border-radius: 40px;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.5);
+      animation: pulse 1.8s infinite;
+      touch-action: manipulation;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    /* Desktop controls helper badge */
+    .keyboard-hint {
+      position: absolute;
+      top: 76px;
+      right: 16px;
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #94a3b8;
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 12px;
+      pointer-events: none;
+      display: none;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .keyboard-hint { display: block; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <!-- Top row -->
+    <div class="top-bar">
+      <!-- Speedometer & Distance (Right side in RTL) -->
+      <div class="hud-card speedo-box">
+        <div class="speedo-val" id="speedo-text">0</div>
+        <div class="speedo-unit">كم/ساعة</div>
+        <div class="dist-val" id="dist-text">0 م</div>
+      </div>
+
+      <!-- Top Center: Stats -->
+      <div class="hud-card stats-box">
+        <div class="stat-pill" title="الجرائد المسلّمة">
+          <span class="stat-icon">🗞️</span>
+          <span id="score-papers">0</span>
+        </div>
+        <div class="stat-pill" title="النجوم الذهبية">
+          <span class="stat-icon">⭐</span>
+          <span id="score-stars">0</span>
+        </div>
+      </div>
+
+      <!-- Left: Action buttons (Camera, Audio, Pause, Fullscreen) -->
+      <div class="top-buttons">
+        <button class="btn-icon" id="btn-cam" title="تبديل الكاميرا">🎥</button>
+        <button class="btn-icon" id="btn-audio" title="الصوت">🔊</button>
+        <button class="btn-icon" id="btn-fullscreen" title="ملء الشاشة">⛶</button>
+      </div>
+    </div>
+
+    <!-- Mini-map radar on bottom left -->
+    <div class="bottom-left-hud">
+      <canvas id="minimap" width="100" height="100"></canvas>
+      <div class="minimap-label">خريطة الحي</div>
+    </div>
+  </div>
+
+  <!-- In-game Notification Banner -->
+  <div id="toast">
+    <span id="toast-icon">✨</span>
+    <span id="toast-msg">تسليم ممتاز! +100</span>
+  </div>
+
+  <div class="keyboard-hint">
+    🎮 لوحة المفاتيح: أسهم / WASD للقيادة • مسافة للقفز • E لرمي الجريدة • B للجرس • C للكاميرا
+  </div>
+
+  <!-- Mobile Touch Controls overlay -->
+  <div id="mobile-controls">
+    <!-- Steering Left / Right -->
+    <div class="controls-left">
+      <div class="steer-btn" id="ctrl-left" data-key="ArrowLeft">◀</div>
+      <div class="steer-btn" id="ctrl-right" data-key="ArrowRight">▶</div>
+    </div>
+
+    <!-- Pedaling, Braking, Throwing, Bell, Jump -->
+    <div class="controls-right">
+      <div class="right-btn-row">
+        <div class="act-btn btn-bell" id="ctrl-bell">
+          <span class="icon">🔔</span>
+          <span class="lbl">جرس</span>
+        </div>
+        <div class="act-btn btn-jump" id="ctrl-jump">
+          <span class="icon">🦘</span>
+          <span class="lbl">قفز</span>
+        </div>
+        <div class="act-btn btn-throw" id="ctrl-throw">
+          <span class="icon">🗞️</span>
+          <span class="lbl">رمي</span>
+        </div>
+      </div>
+
+      <div class="right-btn-row">
+        <div class="act-btn btn-brake" id="ctrl-brake">
+          <span class="icon">🛑</span>
+          <span class="lbl">فرامل</span>
+        </div>
+        <div class="act-btn btn-pedal" id="ctrl-pedal">
+          <span class="icon">⚡</span>
+          <span class="lbl">دواسة</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Start Screen -->
+  <div id="start-screen">
+    <div style="font-size: 50px; margin-bottom: 8px;">🚲🏡🌤️</div>
+    <h1 class="game-logo">جولة دراجة الضاحية</h1>
+    <p class="game-tagline">انطلق بالدراجة على المنحدر الهادئ بين المنازل، سلّم الجرائد للمنازل واستمتع بالأجواء الصيفية الرائعة!</p>
+    
+    <div class="instructions-box">
+      <div>🚴 <b>الدواسة (Pedal):</b> تزيد من سرعتك نزولاً على المنحدر.</div>
+      <div>◀ ▶ <b>التوجيه:</b> التفاف سلس بين الرصيف والطريق والقفز من المنحدرات.</div>
+      <div>🗞️ <b>رمي الجريدة:</b> ارمِ الجرائد في صناديق البريد أمام المنازل.</div>
+      <div>🔔 <b>الجرس:</b> رن الجرس واستمتع بنسيم الصيف والمناظر الساحرة!</div>
+    </div>
+
+    <button class="start-btn" id="start-btn">ابدأ الرحلة 🚴💨</button>
+  </div>
+
+  <!-- Local Three.js script -->
+  <script src="three.min.js"></script>
+
+  <script>
+    /* ==========================================================================
+       COZY DOWNHILL BIKE SIMULATOR - THREE.JS
+       Inspired by Ghibli aesthetic, anime suburban hills, and Paperboy.
+       ========================================================================== */
+
+    // --- Audio Engine (Pure Web Audio API Synthesizer) ---
+    class SoundFX {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+        this.windGain = null;
+        this.windSource = null;
+        this.pedalTimer = 0;
+      }
+      init() {
+        if (this.ctx) return;
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioCtx();
+
+        // Wind noise generator
+        const bufferSize = this.ctx.sampleRate * 2;
+        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+        this.windSource = this.ctx.createBufferSource();
+        this.windSource.buffer = noiseBuffer;
+        this.windSource.loop = true;
+
+        this.windFilter = this.ctx.createBiquadFilter();
+        this.windFilter.type = 'lowpass';
+        this.windFilter.frequency.setValueAtTime(300, this.ctx.currentTime);
+
+        this.windGain = this.ctx.createGain();
+        this.windGain.gain.setValueAtTime(0, this.ctx.currentTime);
+
+        this.windSource.connect(this.windFilter);
+        this.windFilter.connect(this.windGain);
+        this.windGain.connect(this.ctx.destination);
+        this.windSource.start();
+
+        // Start chill background ambient chord progression
+        this.startBgm();
+      }
+
+      setSpeed(speedRatio) {
+        if (!this.ctx || !this.windGain) return;
+        const targetVol = this.enabled ? Math.min(0.28, speedRatio * 0.3) : 0;
+        const targetFreq = 200 + speedRatio * 1800;
+        this.windGain.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.1);
+        this.windFilter.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.1);
+      }
+
+      playBell() {
+        if (!this.ctx || !this.enabled) return;
+        const now = this.ctx.currentTime;
+        [2400, 2430, 4800].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+          gain.gain.setValueAtTime(0.3, now + idx * 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.6);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.05);
+          osc.stop(now + idx * 0.05 + 0.65);
+        });
+      }
+
+      playPaperThrow() {
+        if (!this.ctx || !this.enabled) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(80, now + 0.18);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      }
+
+      playSuccessDelivery() {
+        if (!this.ctx || !this.enabled) return;
+        const now = this.ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6 arpeggio
+        notes.forEach((freq, i) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + i * 0.07);
+          gain.gain.setValueAtTime(0.25, now + i * 0.07);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + 0.4);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + i * 0.07);
+          osc.stop(now + i * 0.07 + 0.45);
+        });
+      }
+
+      playStarPickup() {
+        if (!this.ctx || !this.enabled) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(1760, now + 0.15);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.16);
+      }
+
+      playJump() {
+        if (!this.ctx || !this.enabled) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.linearRampToValueAtTime(450, now + 0.2);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.23);
+      }
+
+      startBgm() {
+        // Soft summer lofi marimba / guitar ambient chime loop
+        const chords = [
+          [261.63, 329.63, 392.00, 493.88], // Cmaj7
+          [220.00, 261.63, 329.63, 392.00], // Am7
+          [174.61, 220.00, 261.63, 329.63], // Fmaj7
+          [196.00, 246.94, 293.66, 392.00]  // G7
+        ];
+        let chordIndex = 0;
+        const playNextChord = () => {
+          if (!this.enabled || !this.ctx) {
+            setTimeout(playNextChord, 2400);
+            return;
+          }
+          const chord = chords[chordIndex % chords.length];
+          chordIndex++;
+          const now = this.ctx.currentTime;
+          chord.forEach((freq, noteIdx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + noteIdx * 0.15);
+            gain.gain.setValueAtTime(0.045, now + noteIdx * 0.15);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + noteIdx * 0.15 + 1.8);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + noteIdx * 0.15);
+            osc.stop(now + noteIdx * 0.15 + 1.85);
+          });
+          setTimeout(playNextChord, 2400);
+        };
+        setTimeout(playNextChord, 800);
+      }
+    }
+
+    const sound = new SoundFX();
+
+    // --- GAME ENGINE SETUP ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    
+    // Anime Summer Sky & Horizon colors
+    const SKY_COLOR = 0x58a4e8;
+    const HORIZON_COLOR = 0xbfe3ff;
+    scene.background = new THREE.Color(SKY_COLOR);
+    scene.fog = new THREE.FogExp2(HORIZON_COLOR, 0.0055);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 800);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    container.appendChild(renderer.domElement);
+
+    // --- LIGHTING (Warm Anime Sunlight) ---
+    const ambientLight = new THREE.AmbientLight(0xfff7e6, 0.7);
+    scene.add(ambientLight);
+
+    const hemiLight = new THREE.HemisphereLight(0x7ec0ee, 0x88aa44, 0.65);
+    scene.add(hemiLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfffaed, 1.25);
+    sunLight.position.set(40, 70, 30);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 10;
+    sunLight.shadow.camera.far = 180;
+    const d = 35;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
+
+    // --- ENVIRONMENT & WORLD PARAMETERS ---
+    const ROAD_WIDTH = 8.5;
+    const SIDEWALK_WIDTH = 3.2;
+    const SLOPE_RAD = -0.065; // ~3.7 degrees downhill slope matching the photo
+    const CHUNK_LENGTH = 120;
+    const TOTAL_CHUNKS = 5;
+
+    // Materials Palette (Stylized Anime Pastel)
+    const materials = {
+      road: new THREE.MeshLambertMaterial({ color: 0x3d434d }),
+      roadLine: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      curb: new THREE.MeshLambertMaterial({ color: 0xd2d7df }),
+      sidewalk: new THREE.MeshLambertMaterial({ color: 0xdecbb5 }),
+      grass: new THREE.MeshLambertMaterial({ color: 0x76ba3f }),
+      fence: new THREE.MeshLambertMaterial({ color: 0xfdfdfd }),
+      houseWall1: new THREE.MeshLambertMaterial({ color: 0xf4ecd8 }),
+      houseWall2: new THREE.MeshLambertMaterial({ color: 0xe5dfcf }),
+      houseWall3: new THREE.MeshLambertMaterial({ color: 0xd5e3cf }),
+      roofRed: new THREE.MeshLambertMaterial({ color: 0xd95338 }),
+      roofGreen: new THREE.MeshLambertMaterial({ color: 0x2e6b5e }),
+      roofBlue: new THREE.MeshLambertMaterial({ color: 0x3d6682 }),
+      wood: new THREE.MeshLambertMaterial({ color: 0x7a5230 }),
+      treeFoliage1: new THREE.MeshLambertMaterial({ color: 0x48a33a }),
+      treeFoliage2: new THREE.MeshLambertMaterial({ color: 0x34802a }),
+      treeFoliage3: new THREE.MeshLambertMaterial({ color: 0x62bd46 }),
+      trashGreen: new THREE.MeshLambertMaterial({ color: 0x2d6344 }),
+      trashBlack: new THREE.MeshLambertMaterial({ color: 0x1f2421 }),
+      mailboxMetal: new THREE.MeshLambertMaterial({ color: 0xb5bcc4 }),
+      paperRoll: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+      starGold: new THREE.MeshBasicMaterial({ color: 0xffd700 }),
+      cloud: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 })
+    };
+
+    // --- PROCEDURAL STYLIZED CLOUDS & DISTANT MOUNTAINS ---
+    // Distant layered mountains overlooking the valley
+    function createDistantMountains() {
+      const group = new THREE.Group();
+      const mountainColors = [0x5078a6, 0x688bb5, 0x82a5c7];
+      for (let layer = 0; layer < 3; layer++) {
+        const count = 18;
+        const radius = 350 + layer * 70;
+        const geom = new THREE.ConeGeometry(70 + layer * 20, 110 + layer * 30, 5);
+        const mat = new THREE.MeshBasicMaterial({
+          color: mountainColors[layer],
+          fog: true
+        });
+        for (let i = 0; i < count; i++) {
+          const cone = new THREE.Mesh(geom, mat);
+          const angle = (i / count) * Math.PI * 0.9 + Math.PI * 0.05;
+          cone.position.set(
+            Math.cos(angle) * radius,
+            -20 + Math.random() * 25 - layer * 15,
+            -Math.sin(angle) * radius - 200
+          );
+          group.add(cone);
+        }
+      }
+      return group;
+    }
+    const mountains = createDistantMountains();
+    scene.add(mountains);
+
+    // Fluffy anime clouds
+    function createFluffyClouds() {
+      const group = new THREE.Group();
+      const cloudGeom = new THREE.DodecahedronGeometry(1, 1);
+      for (let i = 0; i < 28; i++) {
+        const cloudCluster = new THREE.Group();
+        const puffCount = 6 + Math.floor(Math.random() * 6);
+        for (let p = 0; p < puffCount; p++) {
+          const puff = new THREE.Mesh(cloudGeom, materials.cloud);
+          const scale = 8 + Math.random() * 12;
+          puff.scale.set(scale, scale * (0.6 + Math.random() * 0.4), scale);
+          puff.position.set(
+            (p - puffCount / 2) * 8 + (Math.random() - 0.5) * 6,
+            (Math.random() - 0.5) * 4,
+            (Math.random() - 0.5) * 8
+          );
+          cloudCluster.add(puff);
+        }
+        cloudCluster.position.set(
+          (Math.random() - 0.5) * 500,
+          90 + Math.random() * 45,
+          -400 + Math.random() * 600
+        );
+        group.add(cloudCluster);
+      }
+      return group;
+    }
+    const clouds = createFluffyClouds();
+    scene.add(clouds);
+
+    // --- PROCEDURAL PROPS BUILDERS ---
+
+    // 1. Suburban House (American/Japanese suburban cottage from photo)
+    function createHouseModel(roofMat, wallMat) {
+      const house = new THREE.Group();
+
+      // Main House Body
+      const bodyWidth = 10;
+      const bodyHeight = 7.5;
+      const bodyDepth = 12;
+      const bodyGeom = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
+      const body = new THREE.Mesh(bodyGeom, wallMat);
+      body.position.y = bodyHeight / 2;
+      body.castShadow = true;
+      body.receiveShadow = true;
+      house.add(body);
+
+      // Pitched Gable Roof
+      const roofGeom = new THREE.ConeGeometry(9, 5, 4);
+      roofGeom.rotateY(Math.PI / 4);
+      const roof = new THREE.Mesh(roofGeom, roofMat);
+      roof.scale.set(1.15, 1, 1.45);
+      roof.position.y = bodyHeight + 2.2;
+      roof.castShadow = true;
+      house.add(roof);
+
+      // Front Porch & Pillars
+      const porchFloorGeom = new THREE.BoxGeometry(bodyWidth + 1, 0.4, 3.5);
+      const porchFloor = new THREE.Mesh(porchFloorGeom, materials.curb);
+      porchFloor.position.set(0, 0.2, bodyDepth / 2 + 1.75);
+      porchFloor.receiveShadow = true;
+      house.add(porchFloor);
+
+      const pillarGeom = new THREE.BoxGeometry(0.35, 4.5, 0.35);
+      [-bodyWidth / 2 - 0.2, bodyWidth / 2 + 0.2].forEach(px => {
+        const pillar = new THREE.Mesh(pillarGeom, materials.fence);
+        pillar.position.set(px, 2.25, bodyDepth / 2 + 3.2);
+        pillar.castShadow = true;
+        house.add(pillar);
+      });
+
+      // Front Door
+      const doorGeom = new THREE.BoxGeometry(1.6, 3.2, 0.2);
+      const door = new THREE.Mesh(doorGeom, materials.wood);
+      door.position.set(0, 1.6, bodyDepth / 2 + 0.05);
+      house.add(door);
+
+      // Windows
+      const winGeom = new THREE.BoxGeometry(1.8, 1.8, 0.15);
+      const winMat = new THREE.MeshLambertMaterial({ color: 0x9ec9e2 });
+      [-3, 3].forEach(wx => {
+        const win = new THREE.Mesh(winGeom, winMat);
+        win.position.set(wx, 4.5, bodyDepth / 2 + 0.05);
+        house.add(win);
+      });
+
+      // Chimney
+      const chimGeom = new THREE.BoxGeometry(1.2, 3, 1.2);
+      const chim = new THREE.Mesh(chimGeom, materials.roofRed);
+      chim.position.set(3, bodyHeight + 3.5, -2);
+      chim.castShadow = true;
+      house.add(chim);
+
+      return house;
+    }
+
+    // 2. White Picket Fence Segment
+    function createFenceSection(length) {
+      const fence = new THREE.Group();
+      const railGeom = new THREE.BoxGeometry(0.12, 0.15, length);
+      const railTop = new THREE.Mesh(railGeom, materials.fence);
+      railTop.position.set(0, 1.1, 0);
+      railTop.castShadow = true;
+      fence.add(railTop);
+
+      const railBottom = new THREE.Mesh(railGeom, materials.fence);
+      railBottom.position.set(0, 0.45, 0);
+      railBottom.castShadow = true;
+      fence.add(railBottom);
+
+      const picketCount = Math.floor(length / 0.55);
+      const picketGeom = new THREE.BoxGeometry(0.14, 1.25, 0.25);
+      for (let i = 0; i <= picketCount; i++) {
+        const picket = new THREE.Mesh(picketGeom, materials.fence);
+        picket.position.set(0, 0.65, -length / 2 + i * 0.55);
+        picket.castShadow = true;
+        fence.add(picket);
+      }
+      return fence;
+    }
+
+    // 3. Green Wheelie Trash Bin (Matching the exact one from photo)
+    function createTrashCan() {
+      const bin = new THREE.Group();
+      // Main Body
+      const bodyGeom = new THREE.CylinderGeometry(0.55, 0.45, 1.3, 8);
+      const body = new THREE.Mesh(bodyGeom, materials.trashGreen);
+      body.position.y = 0.65;
+      body.castShadow = true;
+      body.receiveShadow = true;
+      bin.add(body);
+
+      // Hinged Lid
+      const lidGeom = new THREE.BoxGeometry(1.15, 0.15, 1.15);
+      const lid = new THREE.Mesh(lidGeom, materials.trashGreen);
+      lid.position.y = 1.35;
+      lid.castShadow = true;
+      bin.add(lid);
+
+      // Wheels
+      const wheelGeom = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 12);
+      wheelGeom.rotateZ(Math.PI / 2);
+      [-0.45, 0.45].forEach(wx => {
+        const wheel = new THREE.Mesh(wheelGeom, materials.trashBlack);
+        wheel.position.set(wx, 0.2, -0.4);
+        wheel.castShadow = true;
+        bin.add(wheel);
+      });
+
+      bin.userData = { type: 'trashcan', radius: 0.7 };
+      return bin;
+    }
+
+    // 4. Mailbox on Wooden Post (Delivery Target)
+    function createMailbox() {
+      const mb = new THREE.Group();
+      // Wooden post
+      const postGeom = new THREE.BoxGeometry(0.22, 1.4, 0.22);
+      const post = new THREE.Mesh(postGeom, materials.wood);
+      post.position.y = 0.7;
+      post.castShadow = true;
+      mb.add(post);
+
+      // Mailbox box
+      const boxGeom = new THREE.BoxGeometry(0.7, 0.55, 1.1);
+      const box = new THREE.Mesh(boxGeom, materials.mailboxMetal);
+      box.position.set(0, 1.45, 0);
+      box.castShadow = true;
+      mb.add(box);
+
+      // Red flag indicator
+      const flagGeom = new THREE.BoxGeometry(0.08, 0.4, 0.25);
+      const flagMat = new THREE.MeshBasicMaterial({ color: 0xe74c3c });
+      const flag = new THREE.Mesh(flagGeom, flagMat);
+      flag.position.set(0.38, 1.55, 0.2);
+      mb.add(flag);
+
+      // Sparkle indicator for active delivery
+      const ringGeom = new THREE.RingGeometry(0.4, 0.6, 16);
+      ringGeom.rotateX(-Math.PI / 2);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd700, side: THREE.DoubleSide });
+      const ring = new THREE.Mesh(ringGeom, ringMat);
+      ring.position.set(0, 0.05, 0);
+      mb.add(ring);
+
+      mb.userData = { type: 'mailbox', delivered: false, radius: 2.2, flag: flag };
+      return mb;
+    }
+
+    // 5. Lush Anime Summer Tree (Multi-toned fluffy crown)
+    function createAnimeTree() {
+      const tree = new THREE.Group();
+      // Trunk
+      const trunkGeom = new THREE.CylinderGeometry(0.35, 0.55, 3.8, 8);
+      const trunk = new THREE.Mesh(trunkGeom, materials.wood);
+      trunk.position.y = 1.9;
+      trunk.castShadow = true;
+      tree.add(trunk);
+
+      // Foliage Clumps (Three tone fluffy clouds)
+      const foliageMats = [materials.treeFoliage1, materials.treeFoliage2, materials.treeFoliage3];
+      const clumpGeom = new THREE.DodecahedronGeometry(1.6, 1);
+      const offsets = [
+        [0, 4.4, 0, 1.7, 0],
+        [-0.9, 3.8, 0.7, 1.3, 1],
+        [0.8, 4.0, -0.6, 1.4, 2],
+        [0.4, 5.2, 0.5, 1.3, 0],
+        [-0.5, 4.8, -0.7, 1.2, 1]
+      ];
+      offsets.forEach(([x, y, z, s, matIdx]) => {
+        const clump = new THREE.Mesh(clumpGeom, foliageMats[matIdx]);
+        clump.position.set(x, y, z);
+        clump.scale.set(s, s * 0.95, s);
+        clump.castShadow = true;
+        tree.add(clump);
+      });
+
+      return tree;
+    }
+
+    // 6. Spinning Gold Star Pickup
+    function createStarPickup() {
+      const star = new THREE.Group();
+      const geom = new THREE.OctahedronGeometry(0.5, 0);
+      const mesh = new THREE.Mesh(geom, materials.starGold);
+      star.add(mesh);
+      star.position.y = 1.1;
+      star.userData = { type: 'star', collected: false, radius: 1.2, mesh: mesh };
+      return star;
+    }
+
+    // --- PROCEDURAL INFINITE CHUNKS MANAGER ---
+    const chunks = [];
+    const interactiveProps = { mailboxes: [], trashCans: [], stars: [] };
+
+    function buildWorldChunk(chunkIndex) {
+      const chunk = new THREE.Group();
+      const zOffset = -chunkIndex * CHUNK_LENGTH;
+      const yOffset = chunkIndex * CHUNK_LENGTH * Math.sin(SLOPE_RAD);
+
+      chunk.position.set(0, yOffset, zOffset);
+      chunk.rotation.x = SLOPE_RAD;
+
+      // Road Surface
+      const roadGeom = new THREE.PlaneGeometry(ROAD_WIDTH, CHUNK_LENGTH);
+      roadGeom.rotateX(-Math.PI / 2);
+      const road = new THREE.Mesh(roadGeom, materials.road);
+      road.position.set(0, 0, -CHUNK_LENGTH / 2);
+      road.receiveShadow = true;
+      chunk.add(road);
+
+      // Road Center Dashed Line
+      const dashCount = Math.floor(CHUNK_LENGTH / 4);
+      const dashGeom = new THREE.PlaneGeometry(0.25, 2.2);
+      dashGeom.rotateX(-Math.PI / 2);
+      for (let i = 0; i < dashCount; i++) {
+        const dash = new THREE.Mesh(dashGeom, materials.roadLine);
+        dash.position.set(0, 0.02, -i * 4 - 2);
+        chunk.add(dash);
+      }
+
+      // Curbs & Sidewalks on both sides (Left & Right)
+      [-1, 1].forEach(side => {
+        const curbX = side * (ROAD_WIDTH / 2 + 0.25);
+        const curbGeom = new THREE.BoxGeometry(0.5, 0.35, CHUNK_LENGTH);
+        const curb = new THREE.Mesh(curbGeom, materials.curb);
+        curb.position.set(curbX, 0.15, -CHUNK_LENGTH / 2);
+        curb.receiveShadow = true;
+        chunk.add(curb);
+
+        const swX = side * (ROAD_WIDTH / 2 + 0.5 + SIDEWALK_WIDTH / 2);
+        const swGeom = new THREE.BoxGeometry(SIDEWALK_WIDTH, 0.28, CHUNK_LENGTH);
+        const sw = new THREE.Mesh(swGeom, materials.sidewalk);
+        sw.position.set(swX, 0.14, -CHUNK_LENGTH / 2);
+        sw.receiveShadow = true;
+        chunk.add(sw);
+
+        // Lawns beyond sidewalks
+        const lawnWidth = 35;
+        const lawnX = side * (ROAD_WIDTH / 2 + 0.5 + SIDEWALK_WIDTH + lawnWidth / 2);
+        const lawnGeom = new THREE.BoxGeometry(lawnWidth, 0.2, CHUNK_LENGTH);
+        const lawn = new THREE.Mesh(lawnGeom, materials.grass);
+        lawn.position.set(lawnX, 0.1, -CHUNK_LENGTH / 2);
+        lawn.receiveShadow = true;
+        chunk.add(lawn);
+      });
+
+      // Houses, Fences, Trees, Mailboxes, Trash Bins
+      const houseInterval = 28;
+      const houseSteps = Math.floor(CHUNK_LENGTH / houseInterval);
+
+      for (let i = 0; i < houseSteps; i++) {
+        const localZ = -i * houseInterval - 14;
+
+        // RIGHT SIDE (Matches the perspective of the uploaded photo!)
+        const rightHouseRoof = (i % 2 === 0) ? materials.roofRed : materials.roofGreen;
+        const rightHouseWall = (i % 3 === 0) ? materials.houseWall1 : materials.houseWall2;
+        const rightHouse = createHouseModel(rightHouseRoof, rightHouseWall);
+        rightHouse.position.set(ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 8.5, 0.2, localZ);
+        rightHouse.rotation.y = -Math.PI / 2;
+        chunk.add(rightHouse);
+
+        // White picket fence along right sidewalk
+        const fenceRight = createFenceSection(houseInterval - 3);
+        fenceRight.position.set(ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 0.2, 0.2, localZ);
+        chunk.add(fenceRight);
+
+        // Mailbox on the right sidewalk edge
+        const mb = createMailbox();
+        mb.position.set(ROAD_WIDTH / 2 + SIDEWALK_WIDTH - 0.6, 0.25, localZ + 4);
+        chunk.add(mb);
+        interactiveProps.mailboxes.push(mb);
+
+        // Green Trash Can on the sidewalk/curb (Just like the photo!)
+        const trash = createTrashCan();
+        trash.position.set(ROAD_WIDTH / 2 + 0.8, 0.25, localZ - 2);
+        chunk.add(trash);
+        interactiveProps.trashCans.push(trash);
+
+        // Lush tree on right front yard
+        const treeRight = createAnimeTree();
+        treeRight.position.set(ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 3.5, 0.2, localZ - 8);
+        chunk.add(treeRight);
+
+        // LEFT SIDE HOUSES & TREES
+        const leftHouseRoof = (i % 2 === 0) ? materials.roofBlue : materials.roofRed;
+        const leftHouse = createHouseModel(leftHouseRoof, materials.houseWall3);
+        leftHouse.position.set(-ROAD_WIDTH / 2 - SIDEWALK_WIDTH - 8.5, 0.2, localZ - 6);
+        leftHouse.rotation.y = Math.PI / 2;
+        chunk.add(leftHouse);
+
+        const fenceLeft = createFenceSection(houseInterval - 4);
+        fenceLeft.position.set(-ROAD_WIDTH / 2 - SIDEWALK_WIDTH - 0.2, 0.2, localZ - 6);
+        chunk.add(fenceLeft);
+
+        const treeLeft = createAnimeTree();
+        treeLeft.position.set(-ROAD_WIDTH / 2 - SIDEWALK_WIDTH - 4, 0.2, localZ + 2);
+        chunk.add(treeLeft);
+
+        // Left mailbox occasionally
+        if (i % 2 === 0) {
+          const mbLeft = createMailbox();
+          mbLeft.position.set(-ROAD_WIDTH / 2 - SIDEWALK_WIDTH + 0.6, 0.25, localZ - 2);
+          mbLeft.rotation.y = Math.PI;
+          chunk.add(mbLeft);
+          interactiveProps.mailboxes.push(mbLeft);
+        }
+
+        // Golden Stars along sidewalk and road
+        const star = createStarPickup();
+        const starX = (Math.random() - 0.5) * (ROAD_WIDTH * 0.7);
+        star.position.set(starX, 0.8, localZ + 8);
+        chunk.add(star);
+        interactiveProps.stars.push(star);
+      }
+
+      chunk.userData = { chunkIndex, zOffset };
+      scene.add(chunk);
+      return chunk;
+    }
+
+    // Initialize initial chunks
+    for (let c = 0; c < TOTAL_CHUNKS; c++) {
+      chunks.push(buildWorldChunk(c));
+    }
+
+    // --- 3D BICYCLE & CYCLIST MODEL (Matching image) ---
+    function buildBicycleAndRider() {
+      const root = new THREE.Group();
+
+      // Palette for bicycle & rider
+      const matBikeFrame = new THREE.MeshLambertMaterial({ color: 0xd63031 }); // Red frame from photo
+      const matTire = new THREE.MeshLambertMaterial({ color: 0x1e272e });
+      const matMetal = new THREE.MeshLambertMaterial({ color: 0xdcdde1 });
+      const matSeat = new THREE.MeshLambertMaterial({ color: 0x2f3542 });
+
+      // Rider clothing palette
+      const matCap = new THREE.MeshLambertMaterial({ color: 0x00b894 }); // Teal/green cap
+      const matShirt = new THREE.MeshLambertMaterial({ color: 0x0984e3 }); // Blue/teal shirt
+      const matShorts = new THREE.MeshLambertMaterial({ color: 0x636e72 }); // Dark shorts
+      const matSkin = new THREE.MeshLambertMaterial({ color: 0xfbc531 }); // Stylized anime skin
+      const matBackpack = new THREE.MeshLambertMaterial({ color: 0xf1c40f }); // Bright yellow backpack from photo
+
+      // Wheels (Front & Rear)
+      const wheelGeom = new THREE.TorusGeometry(0.55, 0.08, 8, 20);
+      const spokeGeom = new THREE.CylinderGeometry(0.015, 0.015, 1.1, 4);
+
+      function createWheel() {
+        const wGroup = new THREE.Group();
+        const tire = new THREE.Mesh(wheelGeom, matTire);
+        tire.castShadow = true;
+        wGroup.add(tire);
+
+        for (let i = 0; i < 4; i++) {
+          const spoke = new THREE.Mesh(spokeGeom, matMetal);
+          spoke.rotation.z = (i * Math.PI) / 4;
+          wGroup.add(spoke);
+        }
+        return wGroup;
+      }
+
+      const rearWheel = createWheel();
+      rearWheel.position.set(0, 0.55, -0.9);
+      root.add(rearWheel);
+
+      const frontFork = new THREE.Group();
+      frontFork.position.set(0, 0.55, 0.9);
+      const frontWheel = createWheel();
+      frontFork.add(frontWheel);
+
+      // Handlebars on front fork
+      const forkStem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.9, 6), matMetal);
+      forkStem.position.set(0, 0.45, 0);
+      frontFork.add(forkStem);
+
+      const hbar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.85, 6), matMetal);
+      hbar.rotation.z = Math.PI / 2;
+      hbar.position.set(0, 0.9, 0);
+      frontFork.add(hbar);
+
+      root.add(frontFork);
+
+      // Bike Frame Tubes
+      const frameGroup = new THREE.Group();
+      const mainTube = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.3, 6), matBikeFrame);
+      mainTube.rotation.x = Math.PI / 3.4;
+      mainTube.position.set(0, 0.85, -0.05);
+      frameGroup.add(mainTube);
+
+      const seatPost = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 6), matBikeFrame);
+      seatPost.rotation.x = -Math.PI / 12;
+      seatPost.position.set(0, 0.85, -0.45);
+      frameGroup.add(seatPost);
+
+      // Saddle
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 0.45), matSeat);
+      saddle.position.set(0, 1.25, -0.5);
+      frameGroup.add(saddle);
+
+      // Pedals / Crank
+      const crank = new THREE.Group();
+      crank.position.set(0, 0.55, -0.4);
+      const crankAxle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.45, 6), matMetal);
+      crankAxle.rotation.z = Math.PI / 2;
+      crank.add(crankAxle);
+      frameGroup.add(crank);
+
+      root.add(frameGroup);
+
+      // --- THE RIDER ---
+      const rider = new THREE.Group();
+      rider.position.set(0, 1.15, -0.45);
+
+      // Hips / Pelvis
+      const hips = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.35), matShorts);
+      rider.add(hips);
+
+      // Torso (leaning slightly forward)
+      const torsoGroup = new THREE.Group();
+      torsoGroup.position.set(0, 0.15, 0);
+      torsoGroup.rotation.x = 0.28;
+
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 0.35), matShirt);
+      torso.position.y = 0.32;
+      torso.castShadow = true;
+      torsoGroup.add(torso);
+
+      // Yellow Backpack (Prominent feature from photo!)
+      const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.55, 0.28), matBackpack);
+      backpack.position.set(0, 0.35, -0.22);
+      backpack.castShadow = true;
+      torsoGroup.add(backpack);
+
+      // Head & Cap
+      const headGroup = new THREE.Group();
+      headGroup.position.set(0, 0.8, 0.05);
+
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), matSkin);
+      headGroup.add(head);
+
+      // Cap / Helmet
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), matCap);
+      cap.position.y = 0.05;
+      headGroup.add(cap);
+
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.22), matCap);
+      visor.position.set(0, 0.05, 0.22);
+      headGroup.add(visor);
+
+      torsoGroup.add(headGroup);
+
+      // Arms extending to handlebars
+      [-0.24, 0.24].forEach(armX => {
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.7, 6), matSkin);
+        arm.position.set(armX, 0.45, 0.3);
+        arm.rotation.x = -Math.PI / 3.2;
+        arm.rotation.z = armX > 0 ? -0.15 : 0.15;
+        torsoGroup.add(arm);
+      });
+
+      rider.add(torsoGroup);
+
+      // Legs / Thighs
+      const leftLeg = new THREE.Group();
+      leftLeg.position.set(-0.18, 0, 0);
+      const leftThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.5, 6), matShorts);
+      leftThigh.position.set(0, -0.22, 0.1);
+      leftThigh.rotation.x = -0.4;
+      leftLeg.add(leftThigh);
+      rider.add(leftLeg);
+
+      const rightLeg = new THREE.Group();
+      rightLeg.position.set(0.18, 0, 0);
+      const rightThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.5, 6), matShorts);
+      rightThigh.position.set(0, -0.22, 0.1);
+      rightThigh.rotation.x = -0.4;
+      rightLeg.add(rightThigh);
+      rider.add(rightLeg);
+
+      root.add(rider);
+
+      root.userData = {
+        rearWheel,
+        frontFork,
+        frontWheel,
+        crank,
+        torsoGroup,
+        leftLeg,
+        rightLeg
+      };
+
+      return root;
+    }
+
+    const bike = buildBicycleAndRider();
+    bike.position.set(1.5, 0.2, 0); // Start on the right side near the sidewalk, matching the photo!
+    scene.add(bike);
+
+    // --- GAME STATE & PHYSICS ---
+    const gameState = {
+      started: false,
+      speed: 0,            // current forward speed in m/s
+      maxSpeed: 18,        // top speed downhill
+      acceleration: 6.5,
+      friction: 0.985,
+      brakeStrength: 14.0,
+      gravityDownhill: 3.5, // downhill pull
+      steer: 0,            // steering angle
+      steerTarget: 0,
+      leanAngle: 0,        // dynamic banking
+      jumpY: 0,
+      jumpVy: 0,
+      isGrounded: true,
+      distanceTraveled: 0,
+      papersDelivered: 0,
+      starsCollected: 0,
+      cameraMode: 0,       // 0: Third person, 1: Close action, 2: First-person handlebar
+      papersInAir: []
+    };
+
+    // Camera views offset configurations
+    const cameraOffsets = [
+      { pos: new THREE.Vector3(0, 2.7, 5.5), look: new THREE.Vector3(0, 1.2, -6) }, // Classic Third-Person (from photo)
+      { pos: new THREE.Vector3(0, 1.9, 3.2), look: new THREE.Vector3(0, 1.1, -8) }, // Close Action
+      { pos: new THREE.Vector3(0, 1.5, 0.2), look: new THREE.Vector3(0, 1.2, -12) } // Handlebar View
+    ];
+
+    // --- INPUT CONTROLS SYSTEM ---
+    const keys = {
+      forward: false,
+      brake: false,
+      left: false,
+      right: false
+    };
+
+    // Keyboard Listeners
+    window.addEventListener('keydown', e => {
+      if (!gameState.started) return;
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.forward = true;
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') keys.brake = true;
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+      if (e.code === 'Space') triggerJump();
+      if (e.code === 'KeyE' || e.code === 'KeyF') throwPaper();
+      if (e.code === 'KeyB') ringBell();
+      if (e.code === 'KeyC') switchCamera();
+    });
+
+    window.addEventListener('keyup', e => {
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.forward = false;
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') keys.brake = false;
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+    });
+
+    // Touch Controls Binding Helper
+    function bindTouchButton(elementId, onPress, onRelease) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+
+      const handlePress = (e) => {
+        e.preventDefault();
+        el.classList.add('active');
+        if (onPress) onPress();
+      };
+      const handleRelease = (e) => {
+        e.preventDefault();
+        el.classList.remove('active');
+        if (onRelease) onRelease();
+      };
+
+      el.addEventListener('touchstart', handlePress, { passive: false });
+      el.addEventListener('touchend', handleRelease, { passive: false });
+      el.addEventListener('touchcancel', handleRelease, { passive: false });
+      el.addEventListener('mousedown', handlePress);
+      el.addEventListener('mouseup', handleRelease);
+      el.addEventListener('mouseleave', handleRelease);
+    }
+
+    // Bind Mobile Buttons
+    bindTouchButton('ctrl-left', () => { keys.left = true; }, () => { keys.left = false; });
+    bindTouchButton('ctrl-right', () => { keys.right = true; }, () => { keys.right = false; });
+    bindTouchButton('ctrl-pedal', () => { keys.forward = true; }, () => { keys.forward = false; });
+    bindTouchButton('ctrl-brake', () => { keys.brake = true; }, () => { keys.brake = false; });
+    bindTouchButton('ctrl-throw', () => { throwPaper(); });
+    bindTouchButton('ctrl-bell', () => { ringBell(); });
+    bindTouchButton('ctrl-jump', () => { triggerJump(); });
+
+    // UI Buttons
+    document.getElementById('btn-cam').addEventListener('click', switchCamera);
+    document.getElementById('btn-audio').addEventListener('click', () => {
+      sound.enabled = !sound.enabled;
+      document.getElementById('btn-audio').innerText = sound.enabled ? '🔊' : '🔇';
+      showToast(sound.enabled ? 'تم تفعيل الصوت 🔊' : 'تم كتم الصوت 🔇');
+    });
+
+    document.getElementById('btn-fullscreen').addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+
+    // Start Screen
+    document.getElementById('start-btn').addEventListener('click', () => {
+      sound.init();
+      gameState.started = true;
+      document.getElementById('start-screen').style.display = 'none';
+      showToast('🚴 انطلق! سلّم الجرائد للمنازل');
+    });
+
+    // Action Triggers
+    function triggerJump() {
+      if (!gameState.isGrounded) return;
+      gameState.jumpVy = 6.2;
+      gameState.isGrounded = false;
+      sound.playJump();
+      if (navigator.vibrate) navigator.vibrate(25);
+    }
+
+    function ringBell() {
+      sound.playBell();
+      showToast('🔔 تررررن! (جرس الدراجة)');
+      if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+    }
+
+    function switchCamera() {
+      gameState.cameraMode = (gameState.cameraMode + 1) % cameraOffsets.length;
+      const modes = ['رؤية قياسية (من الخلف)', 'رؤية قريبة وحماسية', 'منظور المقود (First Person)'];
+      showToast('🎥 ' + modes[gameState.cameraMode]);
+    }
+
+    // --- NEWSPAPER THROWING MECHANIC ---
+    function throwPaper() {
+      sound.playPaperThrow();
+      if (navigator.vibrate) navigator.vibrate(30);
+
+      // Create 3D rolled paper mesh
+      const paperGeom = new THREE.CylinderGeometry(0.12, 0.12, 0.5, 8);
+      paperGeom.rotateZ(Math.PI / 2);
+      const paperMesh = new THREE.Mesh(paperGeom, materials.paperRoll);
+
+      // Spawn at rider position
+      paperMesh.position.copy(bike.position);
+      paperMesh.position.y += 1.4;
+
+      // Determine toss direction: if on right half of road toss right, else left
+      const tossRight = bike.position.x >= 0;
+      const tossX = tossRight ? 7.5 : -7.5;
+      const velocity = new THREE.Vector3(
+        tossX,
+        4.5,
+        -gameState.speed * 0.85 - 5
+      );
+
+      scene.add(paperMesh);
+      gameState.papersInAir.push({
+        mesh: paperMesh,
+        vel: velocity,
+        life: 0,
+        tossRight: tossRight
+      });
+    }
+
+    // Toast Notifications
+    let toastTimeout = null;
+    function showToast(msg, icon = '✨') {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-msg').innerText = msg;
+      document.getElementById('toast-icon').innerText = icon;
+      toast.classList.add('show');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2200);
+    }
+
+    // --- MINI MAP RADAR RENDERER ---
+    const minimapCanvas = document.getElementById('minimap');
+    const mmCtx = minimapCanvas.getContext('2d');
+
+    function renderMiniMap() {
+      const w = minimapCanvas.width;
+      const h = minimapCanvas.height;
+      mmCtx.clearRect(0, 0, w, h);
+
+      // Map background circle
+      mmCtx.save();
+      mmCtx.beginPath();
+      mmCtx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2);
+      mmCtx.clip();
+
+      mmCtx.fillStyle = '#1c2833';
+      mmCtx.fillRect(0, 0, w, h);
+
+      // Road boundaries & center line
+      const scale = 2.2;
+      const centerX = w / 2;
+      const centerY = h / 2 + 15;
+
+      const roadWPix = ROAD_WIDTH * scale;
+      mmCtx.fillStyle = '#34495e';
+      mmCtx.fillRect(centerX - roadWPix / 2, 0, roadWPix, h);
+
+      // Dashed lane
+      mmCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+      mmCtx.lineWidth = 1.5;
+      mmCtx.setLineDash([4, 4]);
+      mmCtx.beginPath();
+      mmCtx.moveTo(centerX, 0);
+      mmCtx.lineTo(centerX, h);
+      mmCtx.stroke();
+      mmCtx.setLineDash([]);
+
+      // Draw nearby mailboxes
+      interactiveProps.mailboxes.forEach(mb => {
+        const relZ = mb.parent.position.z + mb.position.z - bike.position.z;
+        const relX = mb.position.x - bike.position.x;
+        if (Math.abs(relZ) < 35) {
+          const mapX = centerX + relX * scale;
+          const mapY = centerY + relZ * scale;
+          mmCtx.fillStyle = mb.userData.delivered ? '#2ecc71' : '#f39c12';
+          mmCtx.beginPath();
+          mmCtx.arc(mapX, mapY, 3, 0, Math.PI * 2);
+          mmCtx.fill();
+        }
+      });
+
+      // Player marker (Yellow triangle pointing forward)
+      mmCtx.fillStyle = '#ffeb3b';
+      mmCtx.beginPath();
+      mmCtx.moveTo(centerX, centerY - 6);
+      mmCtx.lineTo(centerX - 4, centerY + 5);
+      mmCtx.lineTo(centerX + 4, centerY + 5);
+      mmCtx.closePath();
+      mmCtx.fill();
+
+      mmCtx.restore();
+    }
+
+    // --- MAIN PHYSICS & SIMULATION LOOP ---
+    const clock = new THREE.Clock();
+
+    function updateSimulation(delta) {
+      if (!gameState.started) return;
+
+      // 1. Acceleration, Gravity Downhill, Braking
+      let accel = gameState.gravityDownhill; // Natural downhill roll!
+      if (keys.forward) accel += gameState.acceleration;
+      if (keys.brake) {
+        gameState.speed = Math.max(0, gameState.speed - gameState.brakeStrength * delta);
+      } else {
+        gameState.speed = Math.min(gameState.maxSpeed, gameState.speed + accel * delta);
+        gameState.speed *= Math.pow(gameState.friction, delta * 60);
+      }
+
+      // 2. Steering & Banking
+      const steerSpeed = 2.4;
+      if (keys.left) {
+        gameState.steerTarget = 0.45;
+      } else if (keys.right) {
+        gameState.steerTarget = -0.45;
+      } else {
+        gameState.steerTarget = 0;
+      }
+
+      gameState.steer = THREE.MathUtils.lerp(gameState.steer, gameState.steerTarget, delta * 8);
+      gameState.leanAngle = THREE.MathUtils.lerp(gameState.leanAngle, -gameState.steer * 0.9, delta * 6);
+
+      // Move Bike Forward along slope
+      const forwardDist = gameState.speed * delta;
+      gameState.distanceTraveled += forwardDist;
+
+      bike.position.z -= forwardDist * Math.cos(SLOPE_RAD);
+      bike.position.x += gameState.steer * gameState.speed * delta * 1.8;
+
+      // Constrain player within sidewalks/lawn boundaries
+      const roadLimit = ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 1.2;
+      bike.position.x = THREE.MathUtils.clamp(bike.position.x, -roadLimit, roadLimit);
+
+      // 3. Downhill Slope Surface Height calculation
+      const groundY = -bike.position.z * Math.tan(SLOPE_RAD);
+
+      // Jump / Gravity
+      if (!gameState.isGrounded) {
+        gameState.jumpVy -= 16 * delta;
+        gameState.jumpY += gameState.jumpVy * delta;
+        if (gameState.jumpY <= 0) {
+          gameState.jumpY = 0;
+          gameState.jumpVy = 0;
+          gameState.isGrounded = true;
+          if (navigator.vibrate) navigator.vibrate(15);
+        }
+      }
+
+      bike.position.y = groundY + gameState.jumpY;
+      bike.rotation.x = SLOPE_RAD;
+      bike.rotation.z = gameState.leanAngle;
+      bike.rotation.y = gameState.steer * 0.45;
+
+      // 4. Animate Bike Parts (Wheels spin, Pedals rotate, Rider legs pump)
+      const wheelRotSpeed = (gameState.speed / 0.55) * delta;
+      bike.userData.rearWheel.rotation.x -= wheelRotSpeed;
+      bike.userData.frontWheel.rotation.x -= wheelRotSpeed;
+      bike.userData.crank.rotation.x -= wheelRotSpeed * 0.5;
+
+      // Steer front fork
+      bike.userData.frontFork.rotation.y = gameState.steer * 0.7;
+
+      // Pumping legs animation
+      const pedalCycle = bike.position.z * 1.8;
+      bike.userData.leftLeg.rotation.x = Math.sin(pedalCycle) * 0.45;
+      bike.userData.rightLeg.rotation.x = Math.sin(pedalCycle + Math.PI) * 0.45;
+
+      // 5. Infinite World Chunks Recycling
+      chunks.forEach(chunk => {
+        // If chunk is far behind player, move it ahead
+        const chunkZ = chunk.position.z;
+        if (chunkZ - bike.position.z > CHUNK_LENGTH * 1.5) {
+          const furthestZ = Math.min(...chunks.map(c => c.position.z));
+          const newZ = furthestZ - CHUNK_LENGTH;
+          const newIndex = Math.round(-newZ / CHUNK_LENGTH);
+          const newY = newIndex * CHUNK_LENGTH * Math.sin(SLOPE_RAD);
+
+          chunk.position.set(0, newY, newZ);
+          chunk.userData.chunkIndex = newIndex;
+        }
+      });
+
+      // 6. Update Thrown Papers in Air
+      for (let i = gameState.papersInAir.length - 1; i >= 0; i--) {
+        const p = gameState.papersInAir[i];
+        p.life += delta;
+        p.vel.y -= 12 * delta; // gravity
+        p.mesh.position.x += p.vel.x * delta;
+        p.mesh.position.y += p.vel.y * delta;
+        p.mesh.position.z += p.vel.z * delta;
+        p.mesh.rotation.x += 12 * delta;
+        p.mesh.rotation.y += 8 * delta;
+
+        // Check collision with mailboxes
+        interactiveProps.mailboxes.forEach(mb => {
+          if (!mb.userData.delivered) {
+            const mbWorldPos = new THREE.Vector3();
+            mb.getWorldPosition(mbWorldPos);
+            if (p.mesh.position.distanceTo(mbWorldPos) < mb.userData.radius) {
+              mb.userData.delivered = true;
+              mb.userData.flag.material.color.setHex(0x2ecc71); // Turn flag green!
+              gameState.papersDelivered++;
+              sound.playSuccessDelivery();
+              showToast('🎯 تسليم ممتاز في صندوق البريد! +100', '🗞️');
+              if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+            }
+          }
+        });
+
+        // Remove paper after hitting ground or time
+        if (p.mesh.position.y < groundY - 0.2 || p.life > 2.5) {
+          scene.remove(p.mesh);
+          gameState.papersInAir.splice(i, 1);
+        }
+      }
+
+      // 7. Star Pickups Collision
+      interactiveProps.stars.forEach(star => {
+        if (!star.userData.collected) {
+          star.rotation.y += 2.5 * delta;
+          const starWorldPos = new THREE.Vector3();
+          star.getWorldPosition(starWorldPos);
+          if (bike.position.distanceTo(starWorldPos) < star.userData.radius) {
+            star.userData.collected = true;
+            star.visible = false;
+            gameState.starsCollected++;
+            sound.playStarPickup();
+            showToast('⭐ نجمة ذهبية! +50', '⭐');
+            if (navigator.vibrate) navigator.vibrate(30);
+          }
+        }
+      });
+
+      // 8. Sound & UI Updates
+      sound.setSpeed(gameState.speed / gameState.maxSpeed);
+
+      const kmh = Math.round(gameState.speed * 3.6);
+      document.getElementById('speedo-text').innerText = kmh;
+      document.getElementById('dist-text').innerText = Math.round(gameState.distanceTraveled) + ' م';
+      document.getElementById('score-papers').innerText = gameState.papersDelivered;
+      document.getElementById('score-stars').innerText = gameState.starsCollected;
+
+      // 9. Camera Following with Smooth Damping
+      const camConfig = cameraOffsets[gameState.cameraMode];
+      const targetCamPos = new THREE.Vector3(
+        bike.position.x * 0.65 + camConfig.pos.x,
+        bike.position.y + camConfig.pos.y,
+        bike.position.z + camConfig.pos.z
+      );
+      camera.position.lerp(targetCamPos, delta * 6.5);
+
+      const lookTarget = new THREE.Vector3(
+        bike.position.x * 0.4 + camConfig.look.x,
+        bike.position.y + camConfig.look.y,
+        bike.position.z + camConfig.look.z
+      );
+      camera.lookAt(lookTarget);
+
+      // Move sun light along with bike so shadows stay crisp
+      sunLight.position.set(bike.position.x + 30, bike.position.y + 60, bike.position.z + 20);
+      sunLight.target.position.set(bike.position.x, bike.position.y, bike.position.z - 15);
+      sunLight.target.updateMatrixWorld();
+
+      // Render radar
+      renderMiniMap();
+    }
+
+    // --- RENDER LOOP ---
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = Math.min(clock.getDelta(), 0.05); // prevent large spikes on tab switch
+      updateSimulation(delta);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Resize Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+  </script>
+</body>
+</html>

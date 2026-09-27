@@ -1211,7 +1211,7 @@
     function buildBicycleAndRider() {
       const root = new THREE.Group();
 
-      // Palette & Materials (Stylized Anime Quality)
+      // Materials (Vibrant anime look)
       const matFrame = new THREE.MeshStandardMaterial({
         color: 0xd92632, // rich candy red frame from reference photo
         roughness: 0.22,
@@ -1245,12 +1245,12 @@
 
       // Rider Materials
       const matSkin = new THREE.MeshStandardMaterial({
-        color: 0xffd8b8, // anime skin
+        color: 0xffd8b8,
         roughness: 0.6,
         metalness: 0.0
       });
       const matHair = new THREE.MeshStandardMaterial({
-        color: 0x422614, // brown hair
+        color: 0x422614,
         roughness: 0.7,
         metalness: 0.0
       });
@@ -1301,70 +1301,74 @@
         return mesh;
       }
 
-      // --- WHEELS (HIGH DETAIL WITH 16 CHROME SPOKES & HUBS) ---
+      // --- WHEELS (ALIGNED LONGITUDINALLY IN YZ PLANE TO ROLL FORWARD) ---
       const WHEEL_RADIUS = 0.55;
       const TIRE_WIDTH = 0.055;
 
       function createDetailedWheel() {
         const w = new THREE.Group();
 
-        // Tire
+        // Tire: rotated into YZ plane so it rolls forward along Z!
         const tireGeom = new THREE.TorusGeometry(WHEEL_RADIUS, TIRE_WIDTH, 12, 32);
+        tireGeom.rotateY(Math.PI / 2);
         const tire = new THREE.Mesh(tireGeom, matBlackRubber);
         tire.castShadow = true;
         w.add(tire);
 
-        // Shiny Chrome Rim
+        // Shiny Chrome Rim in YZ plane
         const rimGeom = new THREE.TorusGeometry(WHEEL_RADIUS - 0.035, 0.022, 8, 32);
+        rimGeom.rotateY(Math.PI / 2);
         const rim = new THREE.Mesh(rimGeom, matChrome);
         w.add(rim);
 
-        // Center Hub
+        // Center Hub along X axis
         const hubGeom = new THREE.CylinderGeometry(0.042, 0.042, 0.13, 12);
         hubGeom.rotateZ(Math.PI / 2);
         const hub = new THREE.Mesh(hubGeom, matChrome);
         w.add(hub);
 
-        // Spokes (16 thin radiating chrome spokes)
+        // Spokes (16 thin radiating chrome spokes in YZ plane)
         const spokeGeom = new THREE.CylinderGeometry(0.005, 0.005, WHEEL_RADIUS * 1.94, 4);
         for (let i = 0; i < 8; i++) {
           const spoke = new THREE.Mesh(spokeGeom, matChrome);
-          spoke.rotation.z = (i * Math.PI) / 8;
+          spoke.rotation.x = (i * Math.PI) / 8;
           w.add(spoke);
         }
         return w;
       }
 
-      // Rear Wheel
+      // Rear Wheel at +0.95 (near camera, facing forward)
       const rearWheel = createDetailedWheel();
-      rearWheel.position.set(0, WHEEL_RADIUS, -0.95);
+      rearWheel.position.set(0, WHEEL_RADIUS, 0.95);
       root.add(rearWheel);
 
-      // Curved Rear Mudguard (Fender)
-      const fenderGeom = new THREE.TorusGeometry(WHEEL_RADIUS + 0.035, 0.038, 6, 24, Math.PI * 0.72);
-      const rearFender = new THREE.Mesh(fenderGeom, matFender);
-      rearFender.rotation.z = Math.PI * 0.46;
-      rearFender.position.set(0, WHEEL_RADIUS, -0.95);
+      // Curved Rear Mudguard (Fender) in YZ plane
+      const rearFenderGeom = new THREE.TorusGeometry(WHEEL_RADIUS + 0.035, 0.038, 6, 24, Math.PI * 0.72);
+      rearFenderGeom.rotateY(Math.PI / 2);
+      const rearFender = new THREE.Mesh(rearFenderGeom, matFender);
+      rearFender.rotation.x = Math.PI * 0.45;
+      rearFender.position.set(0, WHEEL_RADIUS, 0.95);
       rearFender.castShadow = true;
       root.add(rearFender);
 
-      // Front Fork & Handlebar Assembly
+      // Front Fork & Handlebar Assembly at -0.95 (facing downhill, down the street)
       const frontForkGroup = new THREE.Group();
-      frontForkGroup.position.set(0, WHEEL_RADIUS, 0.95);
+      frontForkGroup.position.set(0, WHEEL_RADIUS, -0.95);
 
       const frontWheel = createDetailedWheel();
       frontForkGroup.add(frontWheel);
 
       // Front Mudguard
-      const frontFender = new THREE.Mesh(fenderGeom, matFender);
-      frontFender.rotation.z = Math.PI * 0.36;
+      const frontFenderGeom = new THREE.TorusGeometry(WHEEL_RADIUS + 0.035, 0.038, 6, 24, Math.PI * 0.72);
+      frontFenderGeom.rotateY(Math.PI / 2);
+      const frontFender = new THREE.Mesh(frontFenderGeom, matFender);
+      frontFender.rotation.x = -Math.PI * 0.35;
       frontFender.castShadow = true;
       frontForkGroup.add(frontFender);
 
       // Fork Blades (Left & Right)
       [-0.075, 0.075].forEach(sideX => {
-        const blade = createTube([sideX, 0, 0], [sideX, 0.65, 0], 0.022, matChrome);
-        frontForkGroup.add(blade);
+        frontForkGroup.add(createTube([sideX, 0, 0], [sideX, 0.65, 0], 0.022, matChrome));
       });
 
       // Fork Crown
@@ -1375,26 +1379,27 @@
       const steerer = createTube([0, 0.65, 0], [0, 1.05, 0], 0.025, matChrome);
       frontForkGroup.add(steerer);
 
-      // Vintage Round Headlight on fork
+      // Vintage Round Headlight pointing forward into -Z (downhill)
       const lampBody = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.055, 0.11, 12), matChrome);
       lampBody.rotation.x = Math.PI / 2;
-      lampBody.position.set(0, 0.75, 0.12);
+      lampBody.position.set(0, 0.75, -0.12);
       const lampLens = new THREE.Mesh(new THREE.CircleGeometry(0.07, 12), matLampLens);
-      lampLens.position.set(0, 0.75, 0.18);
+      lampLens.position.set(0, 0.75, -0.18);
+      lampLens.rotation.y = Math.PI;
       frontForkGroup.add(lampBody);
       frontForkGroup.add(lampLens);
 
       // Handlebar Stem
-      const hbarStem = createTube([0, 1.02, 0], [0, 1.15, 0.08], 0.022, matChrome);
+      const hbarStem = createTube([0, 1.02, 0], [0, 1.15, -0.06], 0.022, matChrome);
       frontForkGroup.add(hbarStem);
 
-      // Swept Handlebars (Curved tube)
+      // Swept Handlebars (Curved tube sweeping back towards rider)
       const hbarCurve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-0.42, 1.10, -0.06),
-        new THREE.Vector3(-0.25, 1.16, 0.04),
-        new THREE.Vector3(0, 1.18, 0.08),
-        new THREE.Vector3(0.25, 1.16, 0.04),
-        new THREE.Vector3(0.42, 1.10, -0.06)
+        new THREE.Vector3(-0.42, 1.10, 0.06),
+        new THREE.Vector3(-0.25, 1.16, -0.04),
+        new THREE.Vector3(0, 1.18, -0.06),
+        new THREE.Vector3(0.25, 1.16, -0.04),
+        new THREE.Vector3(0.42, 1.10, 0.06)
       ]);
       const hbarGeom = new THREE.TubeGeometry(hbarCurve, 20, 0.02, 8, false);
       const hbar = new THREE.Mesh(hbarGeom, matChrome);
@@ -1404,23 +1409,23 @@
       [-1, 1].forEach(side => {
         const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 8), matBlackRubber);
         grip.rotation.z = (Math.PI / 2.3) * side;
-        grip.position.set(side * 0.38, 1.11, -0.05);
+        grip.position.set(side * 0.38, 1.11, 0.05);
         frontForkGroup.add(grip);
       });
 
       // Chrome Bell on left handlebar
       const bellDome = new THREE.Mesh(new THREE.SphereGeometry(0.042, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), matChrome);
-      bellDome.position.set(-0.22, 1.18, 0.06);
+      bellDome.position.set(-0.22, 1.18, -0.04);
       frontForkGroup.add(bellDome);
 
       root.add(frontForkGroup);
 
-      // --- MAIN BICYCLE FRAME TUBING ---
-      const BB = [0, 0.52, -0.35];       // Bottom Bracket
-      const SEAT_LUG = [0, 1.02, -0.50]; // Top of seat tube
-      const HEAD_TOP = [0, 1.14, 0.85];  // Top of head tube
-      const HEAD_BOT = [0, 0.72, 0.92];  // Bottom of head tube
-      const REAR_AXLE = [0, WHEEL_RADIUS, -0.95];
+      // --- MAIN BICYCLE FRAME TUBING (DIAMOND GEOMETRY, FACING -Z) ---
+      const BB = [0, 0.52, 0.35];        // Bottom Bracket
+      const SEAT_LUG = [0, 1.02, 0.50];  // Top of seat tube
+      const HEAD_TOP = [0, 1.14, -0.85]; // Top of head tube
+      const HEAD_BOT = [0, 0.72, -0.92]; // Bottom of head tube
+      const REAR_AXLE = [0, WHEEL_RADIUS, 0.95];
 
       // Diamond frame tubes
       root.add(createTube(HEAD_BOT, HEAD_TOP, 0.03, matFrame));
@@ -1428,40 +1433,40 @@
       root.add(createTube(BB, HEAD_BOT, 0.028, matFrame));
       root.add(createTube(BB, SEAT_LUG, 0.028, matFrame));
 
-      // Rear Chain Stays
+      // Rear Chain Stays (from BB to rear axle)
       [-0.065, 0.065].forEach(sx => {
         root.add(createTube([sx, BB[1], BB[2]], [sx * 0.9, REAR_AXLE[1], REAR_AXLE[2]], 0.018, matFrame));
       });
 
-      // Rear Seat Stays
+      // Rear Seat Stays (from seat lug to rear axle)
       [-0.065, 0.065].forEach(sx => {
         root.add(createTube([sx * 0.5, SEAT_LUG[1] - 0.04, SEAT_LUG[2]], [sx * 0.9, REAR_AXLE[1], REAR_AXLE[2]], 0.018, matFrame));
       });
 
-      // Rear Commuter Rack (Vintage look from photo)
+      // Rear Commuter Rack (Vintage commuter look from photo)
       const rackTop = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 0.44), matDarkMetal);
-      rackTop.position.set(0, 0.92, -0.92);
+      rackTop.position.set(0, 0.92, 0.90);
       rackTop.castShadow = true;
       root.add(rackTop);
 
       [-0.075, 0.075].forEach(rx => {
-        root.add(createTube([rx, 0.92, -0.92], [rx * 0.9, REAR_AXLE[1], REAR_AXLE[2]], 0.012, matDarkMetal));
-        root.add(createTube([rx, 0.92, -0.74], [rx * 0.5, SEAT_LUG[1] - 0.1, SEAT_LUG[2]], 0.012, matDarkMetal));
+        root.add(createTube([rx, 0.92, 0.90], [rx * 0.9, REAR_AXLE[1], REAR_AXLE[2]], 0.012, matDarkMetal));
+        root.add(createTube([rx, 0.92, 0.72], [rx * 0.5, SEAT_LUG[1] - 0.1, SEAT_LUG[2]], 0.012, matDarkMetal));
       });
 
       // Chrome Seatpost & Vintage Leather Saddle
-      root.add(createTube(SEAT_LUG, [0, 1.15, -0.52], 0.022, matChrome));
+      root.add(createTube(SEAT_LUG, [0, 1.15, 0.52], 0.022, matChrome));
 
       const saddleGroup = new THREE.Group();
-      saddleGroup.position.set(0, 1.16, -0.52);
+      saddleGroup.position.set(0, 1.16, 0.52);
 
       const saddleBody = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.34), matLeather);
       saddleBody.castShadow = true;
       saddleGroup.add(saddleBody);
 
       const saddleNose = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.16, 4), matLeather);
-      saddleNose.rotateX(Math.PI / 2);
-      saddleNose.position.set(0, 0, 0.17);
+      saddleNose.rotateX(-Math.PI / 2);
+      saddleNose.position.set(0, 0, -0.17);
       saddleGroup.add(saddleNose);
 
       root.add(saddleGroup);
@@ -1502,9 +1507,9 @@
 
       root.add(cranksetGroup);
 
-      // --- THE RIDER (HUMAN ANATOMY WITH ARTICULATED IK LEGS) ---
+      // --- THE RIDER (FACING FORWARD TOWARD -Z) ---
       const rider = new THREE.Group();
-      rider.position.set(0, 1.15, -0.50);
+      rider.position.set(0, 1.15, 0.50);
 
       // Pelvis / Hips
       const hips = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.13, 0.18, 10), matShorts);
@@ -1512,10 +1517,10 @@
       hips.castShadow = true;
       rider.add(hips);
 
-      // Torso (Natural forward lean)
+      // Torso (Leaning forward toward handlebars in -Z)
       const torsoGroup = new THREE.Group();
       torsoGroup.position.set(0, 0.16, 0);
-      torsoGroup.rotation.x = 0.35;
+      torsoGroup.rotation.x = -0.35; // leans forward toward -Z
 
       const torso = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.50, 0.25), matShirt);
       torso.position.y = 0.25;
@@ -1527,34 +1532,34 @@
       neck.position.set(0, 0.52, 0);
       torsoGroup.add(neck);
 
-      // Yellow Backpack (Detailed with pocket & straps, exactly like photo)
+      // Yellow Backpack on back (Facing camera in +Z, matches photo!)
       const backpackGroup = new THREE.Group();
-      backpackGroup.position.set(0, 0.26, -0.15);
+      backpackGroup.position.set(0, 0.26, 0.15);
 
       const packBody = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.42, 0.20), matBackpack);
       packBody.castShadow = true;
       backpackGroup.add(packBody);
 
       const packPocket = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.20, 0.07), matBackpack);
-      packPocket.position.set(0, -0.06, -0.11);
+      packPocket.position.set(0, -0.06, 0.11);
       backpackGroup.add(packPocket);
 
       [-0.13, 0.13].forEach(strapX => {
         const strap = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.44, 0.03), matDarkMetal);
-        strap.position.set(strapX, 0.02, 0.12);
+        strap.position.set(strapX, 0.02, -0.12);
         backpackGroup.add(strap);
       });
       torsoGroup.add(backpackGroup);
 
-      // Head & Anime Cycling Cap
+      // Head & Anime Cycling Cap (Looking forward toward -Z)
       const headGroup = new THREE.Group();
-      headGroup.position.set(0, 0.65, 0.03);
-      headGroup.rotation.x = -0.14;
+      headGroup.position.set(0, 0.65, -0.03);
+      headGroup.rotation.x = 0.14; // eyes focused down the road
 
       const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 12), matSkin);
       headGroup.add(head);
 
-      // Hair tufts peeking out
+      // Hair tufts peeking out from back/sides
       const hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.20, 10, 8, 0, Math.PI * 2, Math.PI * 0.4, Math.PI * 0.6), matHair);
       headGroup.add(hairBack);
 
@@ -1563,10 +1568,10 @@
       capDome.position.y = 0.02;
       headGroup.add(capDome);
 
-      // Curved Cap Visor / Brim
+      // Curved Cap Visor / Brim pointing forward toward -Z
       const visor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.028, 0.17), matCap);
-      visor.position.set(0, 0.02, 0.18);
-      visor.rotation.x = 0.2;
+      visor.position.set(0, 0.02, -0.18);
+      visor.rotation.x = -0.2;
       headGroup.add(visor);
 
       // Cap top button
@@ -1576,20 +1581,20 @@
 
       torsoGroup.add(headGroup);
 
-      // Articulated Arms reaching down to handlebar grips
+      // Articulated Arms reaching down-forward to handlebar grips
       [-1, 1].forEach(side => {
         const armGroup = new THREE.Group();
-        armGroup.position.set(side * 0.20, 0.44, 0.04);
+        armGroup.position.set(side * 0.20, 0.44, -0.04);
 
         const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.065, 0.15, 8), matShirt);
-        sleeve.position.set(0, -0.06, 0.02);
+        sleeve.position.set(0, -0.06, -0.02);
         armGroup.add(sleeve);
 
-        armGroup.add(createTube([0, 0, 0], [side * 0.08, -0.30, 0.20], 0.05, matSkin));
-        armGroup.add(createTube([side * 0.08, -0.30, 0.20], [side * 0.14, -0.56, 0.65], 0.045, matSkin));
+        armGroup.add(createTube([0, 0, 0], [side * 0.08, -0.30, -0.20], 0.05, matSkin));
+        armGroup.add(createTube([side * 0.08, -0.30, -0.20], [side * 0.14, -0.56, -0.65], 0.045, matSkin));
 
         const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), matSkin);
-        hand.position.set(side * 0.14, -0.58, 0.67);
+        hand.position.set(side * 0.14, -0.58, -0.67);
         armGroup.add(hand);
 
         torsoGroup.add(armGroup);
@@ -1603,7 +1608,7 @@
 
       // Left Leg
       const leftLeg = new THREE.Group();
-      leftLeg.position.set(-0.15, -0.03, 0.02);
+      leftLeg.position.set(-0.15, -0.03, -0.02);
 
       const leftThigh = new THREE.Group();
       leftThigh.add(createTube([0, 0, 0], [0, -LEG_THIGH_LEN, 0], 0.06, matSkin));
@@ -1617,7 +1622,7 @@
       leftCalf.add(createTube([0, 0, 0], [0, -LEG_CALF_LEN, 0], 0.05, matSkin));
 
       const leftShoe = new THREE.Group();
-      leftShoe.position.set(0, -LEG_CALF_LEN, 0.04);
+      leftShoe.position.set(0, -LEG_CALF_LEN, -0.04);
       leftShoe.add(new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.035, 0.20), matShoeSole));
       const lUpper = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.065, 0.17), matShoeUpper);
       lUpper.position.set(0, 0.038, 0);
@@ -1629,7 +1634,7 @@
 
       // Right Leg
       const rightLeg = new THREE.Group();
-      rightLeg.position.set(0.15, -0.03, 0.02);
+      rightLeg.position.set(0.15, -0.03, -0.02);
 
       const rightThigh = new THREE.Group();
       rightThigh.add(createTube([0, 0, 0], [0, -LEG_THIGH_LEN, 0], 0.06, matSkin));
@@ -1643,7 +1648,7 @@
       rightCalf.add(createTube([0, 0, 0], [0, -LEG_CALF_LEN, 0], 0.05, matSkin));
 
       const rightShoe = new THREE.Group();
-      rightShoe.position.set(0, -LEG_CALF_LEN, 0.04);
+      rightShoe.position.set(0, -LEG_CALF_LEN, -0.04);
       rightShoe.add(new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.035, 0.20), matShoeSole));
       const rUpper = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.065, 0.17), matShoeUpper);
       rUpper.position.set(0, 0.038, 0);
@@ -2000,13 +2005,13 @@
       // 2-Bone Analytical Inverse Kinematics (IK) for Pedaling Legs
       const L1 = 0.42; // Thigh
       const L2 = 0.42; // Calf / Shin
-      const hipY = 1.12, hipZ = -0.48;
-      const bbY = 0.52, bbZ = -0.35;
+      const hipY = 1.12, hipZ = 0.50;
+      const bbY = 0.52, bbZ = 0.35;
       const R = 0.18;
 
       function solveLegIK(pedalTheta, thighObj, calfObj, shoeObj, isLeft) {
-        const pY = bbY - Math.sin(pedalTheta) * R;
-        const pZ = bbZ + Math.cos(pedalTheta) * R;
+        const pY = bbY + Math.cos(pedalTheta) * R;
+        const pZ = bbZ - Math.sin(pedalTheta) * R;
         const dy = pY - hipY;
         const dz = pZ - hipZ;
         const dist = Math.sqrt(dy * dy + dz * dz);

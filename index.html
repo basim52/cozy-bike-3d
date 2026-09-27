@@ -468,8 +468,12 @@
         <div class="dist-val" id="dist-text">0 م</div>
       </div>
 
-      <!-- Top Center: Stats -->
+      <!-- Top Center: Stats & Race Rank -->
       <div class="hud-card stats-box">
+        <div class="stat-pill" id="rank-badge" style="background: rgba(245, 158, 11, 0.25); border: 1px solid #f59e0b; padding: 3px 10px; border-radius: 12px; color: #fef08a;">
+          <span class="stat-icon">🏁</span>
+          <span id="race-rank-text">المركز: 1 / 5</span>
+        </div>
         <div class="stat-pill" title="الجرائد المسلّمة">
           <span class="stat-icon">🗞️</span>
           <span id="score-papers">0</span>
@@ -488,6 +492,12 @@
       </div>
     </div>
 
+    <!-- Race Progress Bar -->
+    <div style="position: absolute; top: 76px; left: 50%; transform: translateX(-50%); width: 85%; max-width: 380px; height: 12px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 10px; overflow: hidden; pointer-events: none; z-index: 12;">
+      <div id="race-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981 0%, #f59e0b 80%, #ef4444 100%); transition: width 0.1s linear;"></div>
+      <div style="position: absolute; left: 8px; top: -1px; font-size: 9px; font-weight: bold; color: #fff;">🏁 النهاية: 1200م</div>
+    </div>
+
     <!-- Mini-map radar on bottom left -->
     <div class="bottom-left-hud">
       <canvas id="minimap" width="100" height="100"></canvas>
@@ -503,6 +513,16 @@
 
   <div class="keyboard-hint">
     🎮 لوحة المفاتيح: أسهم / WASD للقيادة • مسافة للقفز • E لرمي الجريدة • B للجرس • C للكاميرا
+  </div>
+
+  <!-- Finish Line Victory Banner -->
+  <div id="finish-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div style="font-size: 54px; margin-bottom: 8px;">🏆🏁🎉</div>
+      <h2 class="modal-title" id="finish-title">مبروك! أنهيت السباق</h2>
+      <div class="modal-desc" id="finish-desc">حققت المركز الأول بعد منافسة قوية في منحدر الضاحية الساحر!</div>
+      <button class="modal-btn" onclick="location.reload()">إعادة السباق 🚴</button>
+    </div>
   </div>
 
   <!-- Mobile Touch Controls overlay -->
@@ -1072,132 +1092,263 @@
       return star;
     }
 
-    // --- PROCEDURAL INFINITE CHUNKS MANAGER ---
+    // --- PROCEDURAL WINDING DOWNHILL ROAD SYSTEM ---
+    function getRoadCurve(z) {
+      // Smooth natural S-curves winding down the hill
+      return Math.sin(z * 0.016) * 9.5 + Math.sin(z * 0.005) * 14.5;
+    }
+
+    function getRoadTangent(z) {
+      const delta = 1.0;
+      const dx = getRoadCurve(z - delta) - getRoadCurve(z + delta);
+      const dz = -2.0 * delta; // travels towards -Z
+      const len = Math.hypot(dx, dz);
+      return { tx: dx / len, tz: dz / len };
+    }
+
+    function getRoadNormal(z) {
+      const { tx, tz } = getRoadTangent(z);
+      return { nx: -tz, nz: tx };
+    }
+
+    function getRoadAngle(z) {
+      const delta = 1.0;
+      const dx = getRoadCurve(z - delta) - getRoadCurve(z + delta);
+      const dz = -2.0 * delta;
+      return Math.atan2(dx, -dz);
+    }
+
+    // Helper: Build curved ribbon mesh strip
+    function createRibbonStrip(zStart, length, steps, leftOffset, rightOffset, material, yElev = 0) {
+      const stepSize = length / steps;
+      const vertCount = (steps + 1) * 2;
+      const positions = new Float32Array(vertCount * 3);
+      const uvs = new Float32Array(vertCount * 2);
+      const indices = [];
+
+      for (let i = 0; i <= steps; i++) {
+        const z = zStart - i * stepSize;
+        const y = -z * Math.tan(SLOPE_RAD) + yElev;
+        const cx = getRoadCurve(z);
+        const { nx, nz } = getRoadNormal(z);
+
+        // Left vertex
+        positions[(i * 2) * 3] = cx + nx * leftOffset;
+        positions[(i * 2) * 3 + 1] = y;
+        positions[(i * 2) * 3 + 2] = z + nz * leftOffset;
+        uvs[(i * 2) * 2] = 0;
+        uvs[(i * 2) * 2 + 1] = i / steps;
+
+        // Right vertex
+        positions[(i * 2 + 1) * 3] = cx + nx * rightOffset;
+        positions[(i * 2 + 1) * 3 + 1] = y;
+        positions[(i * 2 + 1) * 3 + 2] = z + nz * rightOffset;
+        uvs[(i * 2 + 1) * 2] = 1;
+        uvs[(i * 2 + 1) * 2 + 1] = i / steps;
+
+        if (i < steps) {
+          const v0 = i * 2;
+          const v1 = v0 + 1;
+          const v2 = (i + 1) * 2;
+          const v3 = v2 + 1;
+          indices.push(v0, v2, v1, v1, v2, v3);
+        }
+      }
+
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+      geom.setIndex(indices);
+      geom.computeVertexNormals();
+
+      const mesh = new THREE.Mesh(geom, material);
+      mesh.receiveShadow = true;
+      return mesh;
+    }
+
+    // --- PROCEDURAL INFINITE CHUNKS MANAGER WITH WINDING CURVES ---
     const chunks = [];
     const interactiveProps = { mailboxes: [], trashCans: [], stars: [] };
 
     function buildWorldChunk(chunkIndex) {
       const chunk = new THREE.Group();
-      const zOffset = -chunkIndex * CHUNK_LENGTH;
-      const yOffset = chunkIndex * CHUNK_LENGTH * Math.sin(SLOPE_RAD);
+      const zStart = -chunkIndex * CHUNK_LENGTH;
+      const steps = 30;
 
-      chunk.position.set(0, yOffset, zOffset);
-      chunk.rotation.x = SLOPE_RAD;
-
-      // Road Surface
-      const roadGeom = new THREE.PlaneGeometry(ROAD_WIDTH, CHUNK_LENGTH);
-      roadGeom.rotateX(-Math.PI / 2);
-      const road = new THREE.Mesh(roadGeom, materials.road);
-      road.position.set(0, 0, -CHUNK_LENGTH / 2);
-      road.receiveShadow = true;
+      // 1. Curved Road Ribbon
+      const road = createRibbonStrip(zStart, CHUNK_LENGTH, steps, -ROAD_WIDTH / 2, ROAD_WIDTH / 2, materials.road, 0.0);
       chunk.add(road);
 
-      // Road Center Dashed Line
-      const dashCount = Math.floor(CHUNK_LENGTH / 4);
+      // 2. Curved Sidewalks (Left & Right)
+      const swLeft = createRibbonStrip(zStart, CHUNK_LENGTH, steps, -ROAD_WIDTH / 2 - SIDEWALK_WIDTH, -ROAD_WIDTH / 2, materials.sidewalk, 0.08);
+      chunk.add(swLeft);
+
+      const swRight = createRibbonStrip(zStart, CHUNK_LENGTH, steps, ROAD_WIDTH / 2, ROAD_WIDTH / 2 + SIDEWALK_WIDTH, materials.sidewalk, 0.08);
+      chunk.add(swRight);
+
+      // 3. Curbs (Raised borders)
+      const curbLeft = createRibbonStrip(zStart, CHUNK_LENGTH, steps, -ROAD_WIDTH / 2 - 0.25, -ROAD_WIDTH / 2, materials.curb, 0.12);
+      chunk.add(curbLeft);
+
+      const curbRight = createRibbonStrip(zStart, CHUNK_LENGTH, steps, ROAD_WIDTH / 2, ROAD_WIDTH / 2 + 0.25, materials.curb, 0.12);
+      chunk.add(curbRight);
+
+      // 4. Lawns extending out
+      const lawnLeft = createRibbonStrip(zStart, CHUNK_LENGTH, steps, -ROAD_WIDTH / 2 - SIDEWALK_WIDTH - 45, -ROAD_WIDTH / 2 - SIDEWALK_WIDTH, materials.grass, 0.04);
+      chunk.add(lawnLeft);
+
+      const lawnRight = createRibbonStrip(zStart, CHUNK_LENGTH, steps, ROAD_WIDTH / 2 + SIDEWALK_WIDTH, ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 45, materials.grass, 0.04);
+      chunk.add(lawnRight);
+
+      // 5. Center Dashed Line along the curve
+      const dashStep = 4.0;
+      const dashCount = Math.floor(CHUNK_LENGTH / dashStep);
       const dashGeom = new THREE.PlaneGeometry(0.25, 2.2);
       dashGeom.rotateX(-Math.PI / 2);
+
       for (let i = 0; i < dashCount; i++) {
+        const dz = zStart - i * dashStep - 2.0;
+        const dy = -dz * Math.tan(SLOPE_RAD) + 0.03;
+        const dx = getRoadCurve(dz);
         const dash = new THREE.Mesh(dashGeom, materials.roadLine);
-        dash.position.set(0, 0.02, -i * 4 - 2);
+        dash.position.set(dx, dy, dz);
+        dash.rotation.y = getRoadAngle(dz);
+        dash.rotation.x = SLOPE_RAD;
         chunk.add(dash);
       }
 
-      // Curbs & Sidewalks on both sides (Left & Right)
-      [-1, 1].forEach(side => {
-        const curbX = side * (ROAD_WIDTH / 2 + 0.25);
-        const curbGeom = new THREE.BoxGeometry(0.5, 0.35, CHUNK_LENGTH);
-        const curb = new THREE.Mesh(curbGeom, materials.curb);
-        curb.position.set(curbX, 0.15, -CHUNK_LENGTH / 2);
-        curb.receiveShadow = true;
-        chunk.add(curb);
-
-        const swX = side * (ROAD_WIDTH / 2 + 0.5 + SIDEWALK_WIDTH / 2);
-        const swGeom = new THREE.BoxGeometry(SIDEWALK_WIDTH, 0.28, CHUNK_LENGTH);
-        const sw = new THREE.Mesh(swGeom, materials.sidewalk);
-        sw.position.set(swX, 0.14, -CHUNK_LENGTH / 2);
-        sw.receiveShadow = true;
-        chunk.add(sw);
-
-        // Lawns beyond sidewalks
-        const lawnWidth = 35;
-        const lawnX = side * (ROAD_WIDTH / 2 + 0.5 + SIDEWALK_WIDTH + lawnWidth / 2);
-        const lawnGeom = new THREE.BoxGeometry(lawnWidth, 0.2, CHUNK_LENGTH);
-        const lawn = new THREE.Mesh(lawnGeom, materials.grass);
-        lawn.position.set(lawnX, 0.1, -CHUNK_LENGTH / 2);
-        lawn.receiveShadow = true;
-        chunk.add(lawn);
-      });
-
-      // Houses, Fences, Trees, Mailboxes, Trash Bins
+      // 6. Houses, Fences, Trees, Mailboxes, Trash Bins along the curve
       const houseInterval = 28;
       const houseSteps = Math.floor(CHUNK_LENGTH / houseInterval);
 
       for (let i = 0; i < houseSteps; i++) {
-        const localZ = -i * houseInterval - 14;
+        const propZ = zStart - i * houseInterval - 14;
+        const propY = -propZ * Math.tan(SLOPE_RAD);
+        const cx = getRoadCurve(propZ);
+        const { nx, nz } = getRoadNormal(propZ);
+        const angle = getRoadAngle(propZ);
 
-        // RIGHT SIDE (Matches the perspective of the uploaded photo!)
+        // RIGHT SIDE (Matches reference photo)
         const rightHouseRoof = (i % 2 === 0) ? materials.roofRed : materials.roofGreen;
         const rightHouseWall = (i % 3 === 0) ? materials.houseWall1 : materials.houseWall2;
         const rightHouse = createHouseModel(rightHouseRoof, rightHouseWall);
-        rightHouse.position.set(ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 8.5, 0.2, localZ);
-        rightHouse.rotation.y = -Math.PI / 2;
+        const rHouseX = cx + nx * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 8.5);
+        const rHouseZ = propZ + nz * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 8.5);
+        rightHouse.position.set(rHouseX, propY + 0.2, rHouseZ);
+        rightHouse.rotation.y = angle - Math.PI / 2;
+        rightHouse.rotation.x = SLOPE_RAD;
         chunk.add(rightHouse);
 
         // White picket fence along right sidewalk
         const fenceRight = createFenceSection(houseInterval - 3);
-        fenceRight.position.set(ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 0.2, 0.2, localZ);
+        const rFenceX = cx + nx * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 0.2);
+        const rFenceZ = propZ + nz * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 0.2);
+        fenceRight.position.set(rFenceX, propY + 0.2, rFenceZ);
+        fenceRight.rotation.y = angle;
+        fenceRight.rotation.x = SLOPE_RAD;
         chunk.add(fenceRight);
 
-        // Mailbox on the right sidewalk edge
+        // Mailbox on right sidewalk edge
         const mb = createMailbox();
-        mb.position.set(ROAD_WIDTH / 2 + SIDEWALK_WIDTH - 0.6, 0.25, localZ + 4);
+        const rMbX = cx + nx * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH - 0.6);
+        const rMbZ = propZ + nz * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH - 0.6) + 4;
+        mb.position.set(rMbX, -rMbZ * Math.tan(SLOPE_RAD) + 0.25, rMbZ);
+        mb.rotation.y = angle;
+        mb.rotation.x = SLOPE_RAD;
         chunk.add(mb);
         interactiveProps.mailboxes.push(mb);
 
-        // Green Trash Can on the sidewalk/curb (Just like the photo!)
+        // Green Trash Can on the sidewalk/curb
         const trash = createTrashCan();
-        trash.position.set(ROAD_WIDTH / 2 + 0.8, 0.25, localZ - 2);
+        const rTrX = cx + nx * (ROAD_WIDTH / 2 + 0.8);
+        const rTrZ = propZ + nz * (ROAD_WIDTH / 2 + 0.8) - 2;
+        trash.position.set(rTrX, -rTrZ * Math.tan(SLOPE_RAD) + 0.25, rTrZ);
+        trash.rotation.y = angle;
+        trash.rotation.x = SLOPE_RAD;
         chunk.add(trash);
         interactiveProps.trashCans.push(trash);
 
         // Lush tree on right front yard
         const treeRight = createAnimeTree();
-        treeRight.position.set(ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 3.5, 0.2, localZ - 8);
+        const rTreeX = cx + nx * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 3.5);
+        const rTreeZ = propZ + nz * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 3.5) - 8;
+        treeRight.position.set(rTreeX, -rTreeZ * Math.tan(SLOPE_RAD) + 0.2, rTreeZ);
         chunk.add(treeRight);
 
         // LEFT SIDE HOUSES & TREES
         const leftHouseRoof = (i % 2 === 0) ? materials.roofBlue : materials.roofRed;
         const leftHouse = createHouseModel(leftHouseRoof, materials.houseWall3);
-        leftHouse.position.set(-ROAD_WIDTH / 2 - SIDEWALK_WIDTH - 8.5, 0.2, localZ - 6);
-        leftHouse.rotation.y = Math.PI / 2;
+        const lHouseX = cx - nx * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 8.5);
+        const lHouseZ = propZ - nz * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 8.5) - 6;
+        leftHouse.position.set(lHouseX, -lHouseZ * Math.tan(SLOPE_RAD) + 0.2, lHouseZ);
+        leftHouse.rotation.y = angle + Math.PI / 2;
+        leftHouse.rotation.x = SLOPE_RAD;
         chunk.add(leftHouse);
 
         const fenceLeft = createFenceSection(houseInterval - 4);
-        fenceLeft.position.set(-ROAD_WIDTH / 2 - SIDEWALK_WIDTH - 0.2, 0.2, localZ - 6);
+        const lFenceX = cx - nx * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 0.2);
+        const lFenceZ = propZ - nz * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 0.2) - 6;
+        fenceLeft.position.set(lFenceX, -lFenceZ * Math.tan(SLOPE_RAD) + 0.2, lFenceZ);
+        fenceLeft.rotation.y = angle;
+        fenceLeft.rotation.x = SLOPE_RAD;
         chunk.add(fenceLeft);
 
         const treeLeft = createAnimeTree();
-        treeLeft.position.set(-ROAD_WIDTH / 2 - SIDEWALK_WIDTH - 4, 0.2, localZ + 2);
+        const lTreeX = cx - nx * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 4);
+        const lTreeZ = propZ - nz * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 4) + 2;
+        treeLeft.position.set(lTreeX, -lTreeZ * Math.tan(SLOPE_RAD) + 0.2, lTreeZ);
         chunk.add(treeLeft);
 
-        // Left mailbox occasionally
+        // Occasional Left Mailbox
         if (i % 2 === 0) {
           const mbLeft = createMailbox();
-          mbLeft.position.set(-ROAD_WIDTH / 2 - SIDEWALK_WIDTH + 0.6, 0.25, localZ - 2);
-          mbLeft.rotation.y = Math.PI;
+          const lMbX = cx - nx * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH - 0.6);
+          const lMbZ = propZ - nz * (ROAD_WIDTH / 2 + SIDEWALK_WIDTH - 0.6) - 2;
+          mbLeft.position.set(lMbX, -lMbZ * Math.tan(SLOPE_RAD) + 0.25, lMbZ);
+          mbLeft.rotation.y = angle + Math.PI;
+          mbLeft.rotation.x = SLOPE_RAD;
           chunk.add(mbLeft);
           interactiveProps.mailboxes.push(mbLeft);
         }
 
-        // Golden Stars along sidewalk and road
+        // Golden Stars
         const star = createStarPickup();
-        const starX = (Math.random() - 0.5) * (ROAD_WIDTH * 0.7);
-        star.position.set(starX, 0.8, localZ + 8);
+        const starOffset = (Math.random() - 0.5) * (ROAD_WIDTH * 0.7);
+        const starZ = propZ + 8;
+        const starX = getRoadCurve(starZ) + getRoadNormal(starZ).nx * starOffset;
+        star.position.set(starX, -starZ * Math.tan(SLOPE_RAD) + 0.8, starZ);
         chunk.add(star);
         interactiveProps.stars.push(star);
       }
 
-      chunk.userData = { chunkIndex, zOffset };
+      // Checkered Finish Line Banner at 1200m
+      if (zStart <= -1200 && zStart > -1200 - CHUNK_LENGTH) {
+        const finishArch = new THREE.Group();
+        const archZ = -1200;
+        const archY = -archZ * Math.tan(SLOPE_RAD);
+        const archX = getRoadCurve(archZ);
+        const archAngle = getRoadAngle(archZ);
+        const { nx, nz } = getRoadNormal(archZ);
+
+        // Pillars
+        [-1, 1].forEach(side => {
+          const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 7.5, 8), materials.curb);
+          pillar.position.set(side * (ROAD_WIDTH / 2 + 1.2), 3.75, 0);
+          finishArch.add(pillar);
+        });
+
+        // Overhead Banner
+        const bannerMesh = new THREE.Mesh(new THREE.BoxGeometry(ROAD_WIDTH + 2.8, 1.4, 0.2), new THREE.MeshLambertMaterial({ color: 0xf1c40f }));
+        bannerMesh.position.set(0, 6.8, 0);
+        finishArch.add(bannerMesh);
+
+        finishArch.position.set(archX, archY, archZ);
+        finishArch.rotation.y = archAngle;
+        finishArch.rotation.x = SLOPE_RAD;
+        chunk.add(finishArch);
+      }
+
+      chunk.userData = { chunkIndex, zStart };
       scene.add(chunk);
       return chunk;
     }
@@ -1679,22 +1830,220 @@
       return root;
     }
 
+    // --- RACER MODEL GENERATOR FOR COMPETITORS ---
+    function buildRacerModel(frameColor, jerseyColor, capColor, shortsColor = 0x3d516b) {
+      const root = new THREE.Group();
+      const matFrame = new THREE.MeshStandardMaterial({ color: frameColor, roughness: 0.25, metalness: 0.25 });
+      const matChrome = new THREE.MeshStandardMaterial({ color: 0xf0f3f5, roughness: 0.1, metalness: 0.88 });
+      const matRubber = new THREE.MeshStandardMaterial({ color: 0x1a1e22, roughness: 0.85, metalness: 0.05 });
+      const matDark = new THREE.MeshStandardMaterial({ color: 0x2b303a, roughness: 0.45, metalness: 0.7 });
+      const matLeather = new THREE.MeshStandardMaterial({ color: 0x5a3825, roughness: 0.65, metalness: 0.05 });
+      const matFender = new THREE.MeshStandardMaterial({ color: 0xecf0f1, roughness: 0.2, metalness: 0.75 });
+      const matSkin = new THREE.MeshStandardMaterial({ color: 0xffd8b8, roughness: 0.6 });
+      const matHair = new THREE.MeshStandardMaterial({ color: 0x422614, roughness: 0.7 });
+      const matShirt = new THREE.MeshStandardMaterial({ color: jerseyColor, roughness: 0.7 });
+      const matShorts = new THREE.MeshStandardMaterial({ color: shortsColor, roughness: 0.7 });
+      const matCap = new THREE.MeshStandardMaterial({ color: capColor, roughness: 0.5 });
+      const matShoeUpper = new THREE.MeshStandardMaterial({ color: jerseyColor, roughness: 0.6 });
+      const matShoeSole = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+
+      function createTube(p1, p2, radius, material) {
+        const v1 = new THREE.Vector3(...p1);
+        const v2 = new THREE.Vector3(...p2);
+        const distance = v1.distanceTo(v2);
+        const geom = new THREE.CylinderGeometry(radius, radius, distance, 8);
+        const mesh = new THREE.Mesh(geom, material);
+        mesh.castShadow = true;
+        mesh.position.copy(v1).add(v2).multiplyScalar(0.5);
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v2.clone().sub(v1).normalize());
+        return mesh;
+      }
+
+      const WHEEL_RADIUS = 0.55;
+      function createWheel() {
+        const w = new THREE.Group();
+        const tireGeom = new THREE.TorusGeometry(WHEEL_RADIUS, 0.055, 10, 24);
+        tireGeom.rotateY(Math.PI / 2);
+        w.add(new THREE.Mesh(tireGeom, matRubber));
+        const rimGeom = new THREE.TorusGeometry(WHEEL_RADIUS - 0.035, 0.022, 6, 24);
+        rimGeom.rotateY(Math.PI / 2);
+        w.add(new THREE.Mesh(rimGeom, matChrome));
+        const hubGeom = new THREE.CylinderGeometry(0.04, 0.04, 0.12, 8);
+        hubGeom.rotateZ(Math.PI / 2);
+        w.add(new THREE.Mesh(hubGeom, matChrome));
+        const spokeGeom = new THREE.CylinderGeometry(0.005, 0.005, WHEEL_RADIUS * 1.94, 4);
+        for (let i = 0; i < 6; i++) {
+          const spoke = new THREE.Mesh(spokeGeom, matChrome);
+          spoke.rotation.x = (i * Math.PI) / 6;
+          w.add(spoke);
+        }
+        return w;
+      }
+
+      // Wheels
+      const rearWheel = createWheel();
+      rearWheel.position.set(0, WHEEL_RADIUS, 0.95);
+      root.add(rearWheel);
+
+      const frontForkGroup = new THREE.Group();
+      frontForkGroup.position.set(0, WHEEL_RADIUS, -0.95);
+      const frontWheel = createWheel();
+      frontForkGroup.add(frontWheel);
+
+      [-0.075, 0.075].forEach(sx => frontForkGroup.add(createTube([sx, 0, 0], [sx, 0.65, 0], 0.022, matChrome)));
+      frontForkGroup.add(createTube([0, 0.65, 0], [0, 1.05, 0], 0.025, matChrome));
+
+      // Handlebars
+      const hbar = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8), matChrome);
+      hbar.rotation.z = Math.PI / 2;
+      hbar.position.set(0, 1.15, -0.05);
+      frontForkGroup.add(hbar);
+      root.add(frontForkGroup);
+
+      // Frame
+      const BB = [0, 0.52, 0.35], SEAT_LUG = [0, 1.02, 0.50], HEAD_TOP = [0, 1.14, -0.85], HEAD_BOT = [0, 0.72, -0.92], REAR_AXLE = [0, WHEEL_RADIUS, 0.95];
+      root.add(createTube(HEAD_BOT, HEAD_TOP, 0.03, matFrame));
+      root.add(createTube(SEAT_LUG, HEAD_TOP, 0.026, matFrame));
+      root.add(createTube(BB, HEAD_BOT, 0.028, matFrame));
+      root.add(createTube(BB, SEAT_LUG, 0.028, matFrame));
+      [-0.065, 0.065].forEach(sx => {
+        root.add(createTube([sx, BB[1], BB[2]], [sx * 0.9, REAR_AXLE[1], REAR_AXLE[2]], 0.018, matFrame));
+        root.add(createTube([sx * 0.5, SEAT_LUG[1] - 0.04, SEAT_LUG[2]], [sx * 0.9, REAR_AXLE[1], REAR_AXLE[2]], 0.018, matFrame));
+      });
+
+      // Saddle
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.32), matLeather);
+      saddle.position.set(0, 1.16, 0.52);
+      root.add(saddle);
+
+      // Crank & Pedals
+      const cranksetGroup = new THREE.Group();
+      cranksetGroup.position.set(BB[0], BB[1], BB[2]);
+      const CRANK_LEN = 0.18;
+
+      const leftCrankArm = new THREE.Group();
+      leftCrankArm.position.x = -0.10;
+      leftCrankArm.add(createTube([0, 0, 0], [0, -CRANK_LEN, 0], 0.015, matChrome));
+      const leftPedal = new THREE.Group();
+      leftPedal.position.set(-0.06, -CRANK_LEN, 0);
+      leftPedal.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.06), matDark));
+      leftCrankArm.add(leftPedal);
+      cranksetGroup.add(leftCrankArm);
+
+      const rightCrankArm = new THREE.Group();
+      rightCrankArm.position.x = 0.10;
+      rightCrankArm.rotation.x = Math.PI;
+      rightCrankArm.add(createTube([0, 0, 0], [0, -CRANK_LEN, 0], 0.015, matChrome));
+      const rightPedal = new THREE.Group();
+      rightPedal.position.set(0.06, -CRANK_LEN, 0);
+      rightPedal.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.06), matDark));
+      rightCrankArm.add(rightPedal);
+      cranksetGroup.add(rightCrankArm);
+
+      root.add(cranksetGroup);
+
+      // Rider
+      const rider = new THREE.Group();
+      rider.position.set(0, 1.15, 0.50);
+
+      const torsoGroup = new THREE.Group();
+      torsoGroup.position.set(0, 0.16, 0);
+      torsoGroup.rotation.x = -0.35;
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.50, 0.25), matShirt);
+      torso.position.y = 0.25;
+      torso.castShadow = true;
+      torsoGroup.add(torso);
+
+      // Head & Cap
+      const headGroup = new THREE.Group();
+      headGroup.position.set(0, 0.65, -0.03);
+      headGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), matSkin));
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.21, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.52), matCap);
+      cap.position.y = 0.02;
+      headGroup.add(cap);
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.025, 0.16), matCap);
+      visor.position.set(0, 0.02, -0.17);
+      visor.rotation.x = -0.2;
+      headGroup.add(visor);
+      torsoGroup.add(headGroup);
+
+      // Arms
+      [-1, 1].forEach(side => {
+        const armGroup = new THREE.Group();
+        armGroup.position.set(side * 0.20, 0.44, -0.04);
+        armGroup.add(createTube([0, 0, 0], [side * 0.12, -0.56, -0.65], 0.045, matSkin));
+        torsoGroup.add(armGroup);
+      });
+      rider.add(torsoGroup);
+
+      // Legs IK
+      const LEG_LEN = 0.42;
+      const leftLeg = new THREE.Group();
+      leftLeg.position.set(-0.15, -0.03, -0.02);
+      const leftThigh = new THREE.Group();
+      leftThigh.add(createTube([0, 0, 0], [0, -LEG_LEN, 0], 0.06, matSkin));
+      leftLeg.add(leftThigh);
+      const leftCalf = new THREE.Group();
+      leftCalf.position.set(0, -LEG_LEN, 0);
+      leftCalf.add(createTube([0, 0, 0], [0, -LEG_LEN, 0], 0.05, matSkin));
+      const leftShoe = new THREE.Group();
+      leftShoe.position.set(0, -LEG_LEN, -0.04);
+      leftShoe.add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.18), matShoeUpper));
+      leftCalf.add(leftShoe);
+      leftThigh.add(leftCalf);
+      rider.add(leftLeg);
+
+      const rightLeg = new THREE.Group();
+      rightLeg.position.set(0.15, -0.03, -0.02);
+      const rightThigh = new THREE.Group();
+      rightThigh.add(createTube([0, 0, 0], [0, -LEG_LEN, 0], 0.06, matSkin));
+      rightLeg.add(rightThigh);
+      const rightCalf = new THREE.Group();
+      rightCalf.position.set(0, -LEG_LEN, 0);
+      rightCalf.add(createTube([0, 0, 0], [0, -LEG_LEN, 0], 0.05, matSkin));
+      const rightShoe = new THREE.Group();
+      rightShoe.position.set(0, -LEG_LEN, -0.04);
+      rightShoe.add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.18), matShoeUpper));
+      rightCalf.add(rightShoe);
+      rightThigh.add(rightCalf);
+      rider.add(rightLeg);
+
+      root.add(rider);
+
+      root.userData = {
+        rearWheel, frontForkGroup, frontWheel, cranksetGroup,
+        leftPedal, rightPedal, leftThigh, leftCalf, leftShoe,
+        rightThigh, rightCalf, rightShoe, torsoGroup
+      };
+      return root;
+    }
+
     const bike = buildBicycleAndRider();
-    bike.position.set(1.5, 0.2, 0); // Start on the right side near the sidewalk, matching the photo!
     scene.add(bike);
+
+    // --- RIVAL RACERS SETUP ---
+    const rivalRacers = [
+      { name: 'كايتو 🚴', color: '#3b82f6', model: buildRacerModel(0x0984e3, 0xff7675, 0xd63031), z: -25, laneOffset: -1.6, baseSpeed: 13.8, speed: 13.8, pedalAngle: 0 },
+      { name: 'هارو 🚴', color: '#10b981', model: buildRacerModel(0x00b894, 0xfdcb6e, 0x2d3436), z: -55, laneOffset: 1.5, baseSpeed: 14.2, speed: 14.2, pedalAngle: 1.2 },
+      { name: 'رين 🚴', color: '#8b5cf6', model: buildRacerModel(0x6c5ce7, 0x00cec9, 0x6c5ce7), z: -90, laneOffset: -0.7, baseSpeed: 13.4, speed: 13.4, pedalAngle: 2.5 },
+      { name: 'دايكي 🚴', color: '#eab308', model: buildRacerModel(0x2d3436, 0xffffff, 0xf39c12), z: -130, laneOffset: 1.0, baseSpeed: 14.6, speed: 14.6, pedalAngle: 3.8 }
+    ];
+
+    rivalRacers.forEach(r => scene.add(r.model));
 
     // --- GAME STATE & PHYSICS ---
     const gameState = {
       started: false,
       speed: 0,            // current forward speed in m/s
-      maxSpeed: 18,        // top speed downhill
-      acceleration: 6.5,
+      maxSpeed: 19.5,      // top speed downhill
+      acceleration: 7.0,
       friction: 0.985,
       brakeStrength: 14.0,
-      gravityDownhill: 3.5, // downhill pull
+      gravityDownhill: 3.6, // downhill pull
       steer: 0,            // steering angle
       steerTarget: 0,
       leanAngle: 0,        // dynamic banking
+      lateralOffset: 1.4,  // position across road from center line
       jumpY: 0,
       jumpVy: 0,
       isGrounded: true,
@@ -1702,7 +2051,10 @@
       papersDelivered: 0,
       starsCollected: 0,
       cameraMode: 0,       // 0: Third person, 1: Close action, 2: First-person handlebar
-      papersInAir: []
+      papersInAir: [],
+      rank: 5,
+      drafting: false,
+      finished: false
     };
 
     // Camera views offset configurations
@@ -1872,7 +2224,6 @@
       const h = minimapCanvas.height;
       mmCtx.clearRect(0, 0, w, h);
 
-      // Map background circle
       mmCtx.save();
       mmCtx.beginPath();
       mmCtx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2);
@@ -1881,46 +2232,45 @@
       mmCtx.fillStyle = '#1c2833';
       mmCtx.fillRect(0, 0, w, h);
 
-      // Road boundaries & center line
-      const scale = 2.2;
+      const scale = 2.0;
       const centerX = w / 2;
-      const centerY = h / 2 + 15;
+      const centerY = h / 2 + 10;
 
-      const roadWPix = ROAD_WIDTH * scale;
-      mmCtx.fillStyle = '#34495e';
-      mmCtx.fillRect(centerX - roadWPix / 2, 0, roadWPix, h);
-
-      // Dashed lane
-      mmCtx.strokeStyle = 'rgba(255,255,255,0.4)';
-      mmCtx.lineWidth = 1.5;
-      mmCtx.setLineDash([4, 4]);
+      // Draw winding road strip on radar
       mmCtx.beginPath();
-      mmCtx.moveTo(centerX, 0);
-      mmCtx.lineTo(centerX, h);
+      for (let rz = -40; rz <= 40; rz += 5) {
+        const worldZ = bike.position.z + rz;
+        const relX = (getRoadCurve(worldZ) - bike.position.x) * scale;
+        const mapX = centerX + relX;
+        const mapY = centerY + rz * scale;
+        if (rz === -40) mmCtx.moveTo(mapX, mapY);
+        else mmCtx.lineTo(mapX, mapY);
+      }
+      mmCtx.lineWidth = ROAD_WIDTH * scale;
+      mmCtx.strokeStyle = '#34495e';
       mmCtx.stroke();
-      mmCtx.setLineDash([]);
 
-      // Draw nearby mailboxes
-      interactiveProps.mailboxes.forEach(mb => {
-        const relZ = mb.parent.position.z + mb.position.z - bike.position.z;
-        const relX = mb.position.x - bike.position.x;
-        if (Math.abs(relZ) < 35) {
-          const mapX = centerX + relX * scale;
-          const mapY = centerY + relZ * scale;
-          mmCtx.fillStyle = mb.userData.delivered ? '#2ecc71' : '#f39c12';
+      // Road Centerline
+      mmCtx.lineWidth = 1.5;
+      mmCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+      mmCtx.stroke();
+
+      // Rival Cyclists markers
+      rivalRacers.forEach(r => {
+        const relZ = (r.z - bike.position.z);
+        if (Math.abs(relZ) < 45) {
+          const relX = (r.model.position.x - bike.position.x) * scale;
+          mmCtx.fillStyle = r.color;
           mmCtx.beginPath();
-          mmCtx.arc(mapX, mapY, 3, 0, Math.PI * 2);
+          mmCtx.arc(centerX + relX, centerY + relZ * scale, 3.5, 0, Math.PI * 2);
           mmCtx.fill();
         }
       });
 
-      // Player marker (Yellow triangle pointing forward)
+      // Player marker (Bright gold dot + heading)
       mmCtx.fillStyle = '#ffeb3b';
       mmCtx.beginPath();
-      mmCtx.moveTo(centerX, centerY - 6);
-      mmCtx.lineTo(centerX - 4, centerY + 5);
-      mmCtx.lineTo(centerX + 4, centerY + 5);
-      mmCtx.closePath();
+      mmCtx.arc(centerX, centerY, 4.5, 0, Math.PI * 2);
       mmCtx.fill();
 
       mmCtx.restore();
@@ -1955,16 +2305,40 @@
       gameState.steer = THREE.MathUtils.lerp(gameState.steer, gameState.steerTarget, delta * 8);
       gameState.leanAngle = THREE.MathUtils.lerp(gameState.leanAngle, -gameState.steer * 0.9, delta * 6);
 
+      // Drafting / Slipstream Boost behind rivals
+      let draftingBonus = 0;
+      let isDrafting = false;
+      rivalRacers.forEach(r => {
+        const dz = r.z - bike.position.z;
+        const dx = Math.abs(r.laneOffset - gameState.lateralOffset);
+        // Directly behind rival by 1.5m to 5.5m in same lane
+        if (dz < -1.5 && dz > -5.5 && dx < 1.4) {
+          draftingBonus = 2.8; // speed boost
+          isDrafting = true;
+        }
+      });
+
+      if (isDrafting && !gameState.drafting) {
+        showToast('💨 تيار هوائي! سرعة إضافية ⚡', '💨');
+        if (navigator.vibrate) navigator.vibrate(25);
+      }
+      gameState.drafting = isDrafting;
+
       // Move Bike Forward along slope
-      const forwardDist = gameState.speed * delta;
+      const forwardDist = (gameState.speed + draftingBonus) * delta;
       gameState.distanceTraveled += forwardDist;
 
       bike.position.z -= forwardDist * Math.cos(SLOPE_RAD);
-      bike.position.x += gameState.steer * gameState.speed * delta * 1.8;
+      gameState.lateralOffset += gameState.steer * gameState.speed * delta * 1.8;
 
-      // Constrain player within sidewalks/lawn boundaries
+      // Constrain within road and sidewalks
       const roadLimit = ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 1.2;
-      bike.position.x = THREE.MathUtils.clamp(bike.position.x, -roadLimit, roadLimit);
+      gameState.lateralOffset = THREE.MathUtils.clamp(gameState.lateralOffset, -roadLimit, roadLimit);
+
+      // Follow Curved Winding Road
+      const roadCenter = getRoadCurve(bike.position.z);
+      const roadNormal = getRoadNormal(bike.position.z);
+      bike.position.x = roadCenter + roadNormal.nx * gameState.lateralOffset;
 
       // 3. Downhill Slope Surface Height calculation
       const groundY = -bike.position.z * Math.tan(SLOPE_RAD);
@@ -1984,7 +2358,7 @@
       bike.position.y = groundY + gameState.jumpY;
       bike.rotation.x = SLOPE_RAD;
       bike.rotation.z = gameState.leanAngle;
-      bike.rotation.y = gameState.steer * 0.45;
+      bike.rotation.y = getRoadAngle(bike.position.z) + gameState.steer * 0.45;
 
       // 4. Animate Bike Parts & Articulated Rider (Wheels, Crank, Steer, Legs IK)
       const wheelRotSpeed = (gameState.speed / 0.55) * delta;
@@ -2032,6 +2406,69 @@
       // Subtle dynamic bobbing & sway of rider torso with pedaling
       bike.userData.torsoGroup.position.y = 0.16 + Math.sin(gameState.pedalAngle * 2) * 0.015;
       bike.userData.torsoGroup.rotation.z = Math.sin(gameState.pedalAngle) * 0.035;
+
+      // Update Rival Competitors
+      rivalRacers.forEach(r => {
+        // AI dynamic speeds
+        r.speed = r.baseSpeed + Math.sin(r.z * 0.05) * 1.2;
+        r.z -= r.speed * delta * Math.cos(SLOPE_RAD);
+        r.pedalAngle += (r.speed / 0.55) * delta * 0.75;
+
+        // Position on winding road
+        const rCenter = getRoadCurve(r.z);
+        const rNorm = getRoadNormal(r.z);
+        r.model.position.x = rCenter + rNorm.nx * r.laneOffset;
+        r.model.position.z = r.z + rNorm.nz * r.laneOffset;
+        r.model.position.y = -r.z * Math.tan(SLOPE_RAD);
+        r.model.rotation.y = getRoadAngle(r.z);
+        r.model.rotation.x = SLOPE_RAD;
+
+        // Animate rival bike parts
+        const u = r.model.userData;
+        const wRot = (r.speed / 0.55) * delta;
+        u.rearWheel.rotation.x -= wRot;
+        u.frontWheel.rotation.x -= wRot;
+        u.cranksetGroup.rotation.x = -r.pedalAngle;
+        u.leftPedal.rotation.x = r.pedalAngle;
+        u.rightPedal.rotation.x = r.pedalAngle;
+
+        solveLegIK(r.pedalAngle, u.leftThigh, u.leftCalf, u.leftShoe, true);
+        solveLegIK(r.pedalAngle + Math.PI, u.rightThigh, u.rightCalf, u.rightShoe, false);
+      });
+
+      // Calculate Race Standings / Leaderboard Rank
+      const allRacers = [
+        { isPlayer: true, z: bike.position.z },
+        ...rivalRacers.map(r => ({ isPlayer: false, z: r.z }))
+      ];
+      allRacers.sort((a, b) => a.z - b.z); // lowest Z is furthest downhill (1st place)
+      const currentRank = allRacers.findIndex(r => r.isPlayer) + 1;
+      gameState.rank = currentRank;
+
+      const rankBadges = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+      const rankEl = document.getElementById('race-rank-text');
+      if (rankEl) {
+        rankEl.innerText = 'المركز: ' + currentRank + ' / 5 ' + rankBadges[currentRank - 1];
+      }
+
+      // Race Progress Bar
+      const raceTotalDist = 1200;
+      const progressPercent = Math.min(100, Math.max(0, (-bike.position.z / raceTotalDist) * 100));
+      const fillEl = document.getElementById('race-progress-fill');
+      if (fillEl) fillEl.style.width = progressPercent + '%';
+
+      // Check Finish Line (1200m)
+      if (-bike.position.z >= raceTotalDist && !gameState.finished) {
+        gameState.finished = true;
+        const modal = document.getElementById('finish-modal');
+        if (modal) {
+          document.getElementById('finish-title').innerText = currentRank === 1 ? '🏆 فوز ساحق! المركز الأول' : ('🏁 أنهيت السباق في المركز ' + currentRank);
+          document.getElementById('finish-desc').innerText = 'قطعت المنحدر المتعرج لمسافة 1200م في منافسة رائعة!';
+          modal.classList.add('open');
+        }
+        sound.playSuccessDelivery();
+        if (navigator.vibrate) navigator.vibrate([100, 100, 200]);
+      }
 
       // 5. Infinite World Chunks Recycling
       chunks.forEach(chunk => {

@@ -1207,169 +1207,468 @@
       chunks.push(buildWorldChunk(c));
     }
 
-    // --- 3D BICYCLE & CYCLIST MODEL (Matching image) ---
+    // --- 3D HIGH-DETAIL BICYCLE & ANIMATED CYCLIST (Matching photo) ---
     function buildBicycleAndRider() {
       const root = new THREE.Group();
 
-      // Palette for bicycle & rider
-      const matBikeFrame = new THREE.MeshLambertMaterial({ color: 0xd63031 }); // Red frame from photo
-      const matTire = new THREE.MeshLambertMaterial({ color: 0x1e272e });
-      const matMetal = new THREE.MeshLambertMaterial({ color: 0xdcdde1 });
-      const matSeat = new THREE.MeshLambertMaterial({ color: 0x2f3542 });
+      // Palette & Materials (Stylized Anime Quality)
+      const matFrame = new THREE.MeshStandardMaterial({
+        color: 0xd92632, // rich candy red frame from reference photo
+        roughness: 0.22,
+        metalness: 0.25
+      });
+      const matChrome = new THREE.MeshStandardMaterial({
+        color: 0xf0f3f5,
+        roughness: 0.1,
+        metalness: 0.88
+      });
+      const matBlackRubber = new THREE.MeshStandardMaterial({
+        color: 0x1a1e22,
+        roughness: 0.85,
+        metalness: 0.05
+      });
+      const matDarkMetal = new THREE.MeshStandardMaterial({
+        color: 0x2b303a,
+        roughness: 0.45,
+        metalness: 0.7
+      });
+      const matLeather = new THREE.MeshStandardMaterial({
+        color: 0x5a3825, // vintage brown leather saddle
+        roughness: 0.65,
+        metalness: 0.05
+      });
+      const matFender = new THREE.MeshStandardMaterial({
+        color: 0xecf0f1, // polished silver mudguard
+        roughness: 0.2,
+        metalness: 0.75
+      });
 
-      // Rider clothing palette
-      const matCap = new THREE.MeshLambertMaterial({ color: 0x00b894 }); // Teal/green cap
-      const matShirt = new THREE.MeshLambertMaterial({ color: 0x0984e3 }); // Blue/teal shirt
-      const matShorts = new THREE.MeshLambertMaterial({ color: 0x636e72 }); // Dark shorts
-      const matSkin = new THREE.MeshLambertMaterial({ color: 0xfbc531 }); // Stylized anime skin
-      const matBackpack = new THREE.MeshLambertMaterial({ color: 0xf1c40f }); // Bright yellow backpack from photo
+      // Rider Materials
+      const matSkin = new THREE.MeshStandardMaterial({
+        color: 0xffd8b8, // anime skin
+        roughness: 0.6,
+        metalness: 0.0
+      });
+      const matHair = new THREE.MeshStandardMaterial({
+        color: 0x422614, // brown hair
+        roughness: 0.7,
+        metalness: 0.0
+      });
+      const matShirt = new THREE.MeshStandardMaterial({
+        color: 0x00b894, // turquoise / mint shirt
+        roughness: 0.7,
+        metalness: 0.0
+      });
+      const matShorts = new THREE.MeshStandardMaterial({
+        color: 0x3d516b, // dark slate shorts
+        roughness: 0.7,
+        metalness: 0.0
+      });
+      const matCap = new THREE.MeshStandardMaterial({
+        color: 0x008466, // dark teal cycling cap
+        roughness: 0.5,
+        metalness: 0.0
+      });
+      const matBackpack = new THREE.MeshStandardMaterial({
+        color: 0xf1c40f, // vibrant yellow backpack
+        roughness: 0.5,
+        metalness: 0.05
+      });
+      const matShoeUpper = new THREE.MeshStandardMaterial({
+        color: 0xd63031, // red sneakers
+        roughness: 0.6,
+        metalness: 0.0
+      });
+      const matShoeSole = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.4,
+        metalness: 0.0
+      });
+      const matLampLens = new THREE.MeshBasicMaterial({
+        color: 0xfffbe6
+      });
 
-      // Wheels (Front & Rear)
-      const wheelGeom = new THREE.TorusGeometry(0.55, 0.08, 8, 20);
-      const spokeGeom = new THREE.CylinderGeometry(0.015, 0.015, 1.1, 4);
-
-      function createWheel() {
-        const wGroup = new THREE.Group();
-        const tire = new THREE.Mesh(wheelGeom, matTire);
-        tire.castShadow = true;
-        wGroup.add(tire);
-
-        for (let i = 0; i < 4; i++) {
-          const spoke = new THREE.Mesh(spokeGeom, matMetal);
-          spoke.rotation.z = (i * Math.PI) / 4;
-          wGroup.add(spoke);
-        }
-        return wGroup;
+      // Frame Tube Helper
+      function createTube(p1, p2, radius, material) {
+        const v1 = new THREE.Vector3(...p1);
+        const v2 = new THREE.Vector3(...p2);
+        const distance = v1.distanceTo(v2);
+        const geom = new THREE.CylinderGeometry(radius, radius, distance, 10);
+        const mesh = new THREE.Mesh(geom, material);
+        mesh.castShadow = true;
+        mesh.position.copy(v1).add(v2).multiplyScalar(0.5);
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v2.clone().sub(v1).normalize());
+        return mesh;
       }
 
-      const rearWheel = createWheel();
-      rearWheel.position.set(0, 0.55, -0.9);
+      // --- WHEELS (HIGH DETAIL WITH 16 CHROME SPOKES & HUBS) ---
+      const WHEEL_RADIUS = 0.55;
+      const TIRE_WIDTH = 0.055;
+
+      function createDetailedWheel() {
+        const w = new THREE.Group();
+
+        // Tire
+        const tireGeom = new THREE.TorusGeometry(WHEEL_RADIUS, TIRE_WIDTH, 12, 32);
+        const tire = new THREE.Mesh(tireGeom, matBlackRubber);
+        tire.castShadow = true;
+        w.add(tire);
+
+        // Shiny Chrome Rim
+        const rimGeom = new THREE.TorusGeometry(WHEEL_RADIUS - 0.035, 0.022, 8, 32);
+        const rim = new THREE.Mesh(rimGeom, matChrome);
+        w.add(rim);
+
+        // Center Hub
+        const hubGeom = new THREE.CylinderGeometry(0.042, 0.042, 0.13, 12);
+        hubGeom.rotateZ(Math.PI / 2);
+        const hub = new THREE.Mesh(hubGeom, matChrome);
+        w.add(hub);
+
+        // Spokes (16 thin radiating chrome spokes)
+        const spokeGeom = new THREE.CylinderGeometry(0.005, 0.005, WHEEL_RADIUS * 1.94, 4);
+        for (let i = 0; i < 8; i++) {
+          const spoke = new THREE.Mesh(spokeGeom, matChrome);
+          spoke.rotation.z = (i * Math.PI) / 8;
+          w.add(spoke);
+        }
+        return w;
+      }
+
+      // Rear Wheel
+      const rearWheel = createDetailedWheel();
+      rearWheel.position.set(0, WHEEL_RADIUS, -0.95);
       root.add(rearWheel);
 
-      const frontFork = new THREE.Group();
-      frontFork.position.set(0, 0.55, 0.9);
-      const frontWheel = createWheel();
-      frontFork.add(frontWheel);
+      // Curved Rear Mudguard (Fender)
+      const fenderGeom = new THREE.TorusGeometry(WHEEL_RADIUS + 0.035, 0.038, 6, 24, Math.PI * 0.72);
+      const rearFender = new THREE.Mesh(fenderGeom, matFender);
+      rearFender.rotation.z = Math.PI * 0.46;
+      rearFender.position.set(0, WHEEL_RADIUS, -0.95);
+      rearFender.castShadow = true;
+      root.add(rearFender);
 
-      // Handlebars on front fork
-      const forkStem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.9, 6), matMetal);
-      forkStem.position.set(0, 0.45, 0);
-      frontFork.add(forkStem);
+      // Front Fork & Handlebar Assembly
+      const frontForkGroup = new THREE.Group();
+      frontForkGroup.position.set(0, WHEEL_RADIUS, 0.95);
 
-      const hbar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.85, 6), matMetal);
-      hbar.rotation.z = Math.PI / 2;
-      hbar.position.set(0, 0.9, 0);
-      frontFork.add(hbar);
+      const frontWheel = createDetailedWheel();
+      frontForkGroup.add(frontWheel);
 
-      root.add(frontFork);
+      // Front Mudguard
+      const frontFender = new THREE.Mesh(fenderGeom, matFender);
+      frontFender.rotation.z = Math.PI * 0.36;
+      frontFender.castShadow = true;
+      frontForkGroup.add(frontFender);
 
-      // Bike Frame Tubes
-      const frameGroup = new THREE.Group();
-      const mainTube = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.3, 6), matBikeFrame);
-      mainTube.rotation.x = Math.PI / 3.4;
-      mainTube.position.set(0, 0.85, -0.05);
-      frameGroup.add(mainTube);
+      // Fork Blades (Left & Right)
+      [-0.075, 0.075].forEach(sideX => {
+        const blade = createTube([sideX, 0, 0], [sideX, 0.65, 0], 0.022, matChrome);
+        frontForkGroup.add(blade);
+      });
 
-      const seatPost = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 6), matBikeFrame);
-      seatPost.rotation.x = -Math.PI / 12;
-      seatPost.position.set(0, 0.85, -0.45);
-      frameGroup.add(seatPost);
+      // Fork Crown
+      const forkCrown = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.05), matFrame);
+      forkCrown.position.set(0, 0.65, 0);
+      frontForkGroup.add(forkCrown);
 
-      // Saddle
-      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 0.45), matSeat);
-      saddle.position.set(0, 1.25, -0.5);
-      frameGroup.add(saddle);
+      const steerer = createTube([0, 0.65, 0], [0, 1.05, 0], 0.025, matChrome);
+      frontForkGroup.add(steerer);
 
-      // Pedals / Crank
-      const crank = new THREE.Group();
-      crank.position.set(0, 0.55, -0.4);
-      const crankAxle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.45, 6), matMetal);
-      crankAxle.rotation.z = Math.PI / 2;
-      crank.add(crankAxle);
-      frameGroup.add(crank);
+      // Vintage Round Headlight on fork
+      const lampBody = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.055, 0.11, 12), matChrome);
+      lampBody.rotation.x = Math.PI / 2;
+      lampBody.position.set(0, 0.75, 0.12);
+      const lampLens = new THREE.Mesh(new THREE.CircleGeometry(0.07, 12), matLampLens);
+      lampLens.position.set(0, 0.75, 0.18);
+      frontForkGroup.add(lampBody);
+      frontForkGroup.add(lampLens);
 
-      root.add(frameGroup);
+      // Handlebar Stem
+      const hbarStem = createTube([0, 1.02, 0], [0, 1.15, 0.08], 0.022, matChrome);
+      frontForkGroup.add(hbarStem);
 
-      // --- THE RIDER ---
+      // Swept Handlebars (Curved tube)
+      const hbarCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-0.42, 1.10, -0.06),
+        new THREE.Vector3(-0.25, 1.16, 0.04),
+        new THREE.Vector3(0, 1.18, 0.08),
+        new THREE.Vector3(0.25, 1.16, 0.04),
+        new THREE.Vector3(0.42, 1.10, -0.06)
+      ]);
+      const hbarGeom = new THREE.TubeGeometry(hbarCurve, 20, 0.02, 8, false);
+      const hbar = new THREE.Mesh(hbarGeom, matChrome);
+      frontForkGroup.add(hbar);
+
+      // Ergonomic Rubber Grips
+      [-1, 1].forEach(side => {
+        const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 8), matBlackRubber);
+        grip.rotation.z = (Math.PI / 2.3) * side;
+        grip.position.set(side * 0.38, 1.11, -0.05);
+        frontForkGroup.add(grip);
+      });
+
+      // Chrome Bell on left handlebar
+      const bellDome = new THREE.Mesh(new THREE.SphereGeometry(0.042, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), matChrome);
+      bellDome.position.set(-0.22, 1.18, 0.06);
+      frontForkGroup.add(bellDome);
+
+      root.add(frontForkGroup);
+
+      // --- MAIN BICYCLE FRAME TUBING ---
+      const BB = [0, 0.52, -0.35];       // Bottom Bracket
+      const SEAT_LUG = [0, 1.02, -0.50]; // Top of seat tube
+      const HEAD_TOP = [0, 1.14, 0.85];  // Top of head tube
+      const HEAD_BOT = [0, 0.72, 0.92];  // Bottom of head tube
+      const REAR_AXLE = [0, WHEEL_RADIUS, -0.95];
+
+      // Diamond frame tubes
+      root.add(createTube(HEAD_BOT, HEAD_TOP, 0.03, matFrame));
+      root.add(createTube(SEAT_LUG, HEAD_TOP, 0.026, matFrame));
+      root.add(createTube(BB, HEAD_BOT, 0.028, matFrame));
+      root.add(createTube(BB, SEAT_LUG, 0.028, matFrame));
+
+      // Rear Chain Stays
+      [-0.065, 0.065].forEach(sx => {
+        root.add(createTube([sx, BB[1], BB[2]], [sx * 0.9, REAR_AXLE[1], REAR_AXLE[2]], 0.018, matFrame));
+      });
+
+      // Rear Seat Stays
+      [-0.065, 0.065].forEach(sx => {
+        root.add(createTube([sx * 0.5, SEAT_LUG[1] - 0.04, SEAT_LUG[2]], [sx * 0.9, REAR_AXLE[1], REAR_AXLE[2]], 0.018, matFrame));
+      });
+
+      // Rear Commuter Rack (Vintage look from photo)
+      const rackTop = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 0.44), matDarkMetal);
+      rackTop.position.set(0, 0.92, -0.92);
+      rackTop.castShadow = true;
+      root.add(rackTop);
+
+      [-0.075, 0.075].forEach(rx => {
+        root.add(createTube([rx, 0.92, -0.92], [rx * 0.9, REAR_AXLE[1], REAR_AXLE[2]], 0.012, matDarkMetal));
+        root.add(createTube([rx, 0.92, -0.74], [rx * 0.5, SEAT_LUG[1] - 0.1, SEAT_LUG[2]], 0.012, matDarkMetal));
+      });
+
+      // Chrome Seatpost & Vintage Leather Saddle
+      root.add(createTube(SEAT_LUG, [0, 1.15, -0.52], 0.022, matChrome));
+
+      const saddleGroup = new THREE.Group();
+      saddleGroup.position.set(0, 1.16, -0.52);
+
+      const saddleBody = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.34), matLeather);
+      saddleBody.castShadow = true;
+      saddleGroup.add(saddleBody);
+
+      const saddleNose = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.16, 4), matLeather);
+      saddleNose.rotateX(Math.PI / 2);
+      saddleNose.position.set(0, 0, 0.17);
+      saddleGroup.add(saddleNose);
+
+      root.add(saddleGroup);
+
+      // Crankset & Articulated Pedals
+      const cranksetGroup = new THREE.Group();
+      cranksetGroup.position.set(BB[0], BB[1], BB[2]);
+
+      const chainring = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.012, 16), matDarkMetal);
+      chainring.rotation.z = Math.PI / 2;
+      chainring.position.x = 0.07;
+      cranksetGroup.add(chainring);
+
+      const CRANK_LEN = 0.18;
+
+      // Left Crank Arm & Level Pedal
+      const leftCrankArm = new THREE.Group();
+      leftCrankArm.position.x = -0.10;
+      leftCrankArm.add(createTube([0, 0, 0], [0, -CRANK_LEN, 0], 0.015, matChrome));
+
+      const leftPedal = new THREE.Group();
+      leftPedal.position.set(-0.06, -CRANK_LEN, 0);
+      leftPedal.add(new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.028, 0.07), matDarkMetal));
+      leftCrankArm.add(leftPedal);
+      cranksetGroup.add(leftCrankArm);
+
+      // Right Crank Arm (180 deg opposite) & Level Pedal
+      const rightCrankArm = new THREE.Group();
+      rightCrankArm.position.x = 0.10;
+      rightCrankArm.rotation.x = Math.PI;
+      rightCrankArm.add(createTube([0, 0, 0], [0, -CRANK_LEN, 0], 0.015, matChrome));
+
+      const rightPedal = new THREE.Group();
+      rightPedal.position.set(0.06, -CRANK_LEN, 0);
+      rightPedal.add(new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.028, 0.07), matDarkMetal));
+      rightCrankArm.add(rightPedal);
+      cranksetGroup.add(rightCrankArm);
+
+      root.add(cranksetGroup);
+
+      // --- THE RIDER (HUMAN ANATOMY WITH ARTICULATED IK LEGS) ---
       const rider = new THREE.Group();
-      rider.position.set(0, 1.15, -0.45);
+      rider.position.set(0, 1.15, -0.50);
 
-      // Hips / Pelvis
-      const hips = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.35), matShorts);
+      // Pelvis / Hips
+      const hips = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.13, 0.18, 10), matShorts);
+      hips.position.y = 0.08;
+      hips.castShadow = true;
       rider.add(hips);
 
-      // Torso (leaning slightly forward)
+      // Torso (Natural forward lean)
       const torsoGroup = new THREE.Group();
-      torsoGroup.position.set(0, 0.15, 0);
-      torsoGroup.rotation.x = 0.28;
+      torsoGroup.position.set(0, 0.16, 0);
+      torsoGroup.rotation.x = 0.35;
 
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 0.35), matShirt);
-      torso.position.y = 0.32;
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.50, 0.25), matShirt);
+      torso.position.y = 0.25;
       torso.castShadow = true;
       torsoGroup.add(torso);
 
-      // Yellow Backpack (Prominent feature from photo!)
-      const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.55, 0.28), matBackpack);
-      backpack.position.set(0, 0.35, -0.22);
-      backpack.castShadow = true;
-      torsoGroup.add(backpack);
+      // Neck
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.10, 10), matSkin);
+      neck.position.set(0, 0.52, 0);
+      torsoGroup.add(neck);
 
-      // Head & Cap
+      // Yellow Backpack (Detailed with pocket & straps, exactly like photo)
+      const backpackGroup = new THREE.Group();
+      backpackGroup.position.set(0, 0.26, -0.15);
+
+      const packBody = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.42, 0.20), matBackpack);
+      packBody.castShadow = true;
+      backpackGroup.add(packBody);
+
+      const packPocket = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.20, 0.07), matBackpack);
+      packPocket.position.set(0, -0.06, -0.11);
+      backpackGroup.add(packPocket);
+
+      [-0.13, 0.13].forEach(strapX => {
+        const strap = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.44, 0.03), matDarkMetal);
+        strap.position.set(strapX, 0.02, 0.12);
+        backpackGroup.add(strap);
+      });
+      torsoGroup.add(backpackGroup);
+
+      // Head & Anime Cycling Cap
       const headGroup = new THREE.Group();
-      headGroup.position.set(0, 0.8, 0.05);
+      headGroup.position.set(0, 0.65, 0.03);
+      headGroup.rotation.x = -0.14;
 
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), matSkin);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 12), matSkin);
       headGroup.add(head);
 
-      // Cap / Helmet
-      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), matCap);
-      cap.position.y = 0.05;
-      headGroup.add(cap);
+      // Hair tufts peeking out
+      const hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.20, 10, 8, 0, Math.PI * 2, Math.PI * 0.4, Math.PI * 0.6), matHair);
+      headGroup.add(hairBack);
 
-      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.22), matCap);
-      visor.position.set(0, 0.05, 0.22);
+      // Cap Dome
+      const capDome = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.52), matCap);
+      capDome.position.y = 0.02;
+      headGroup.add(capDome);
+
+      // Curved Cap Visor / Brim
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.028, 0.17), matCap);
+      visor.position.set(0, 0.02, 0.18);
+      visor.rotation.x = 0.2;
       headGroup.add(visor);
+
+      // Cap top button
+      const capBtn = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), matFrame);
+      capBtn.position.set(0, 0.22, 0);
+      headGroup.add(capBtn);
 
       torsoGroup.add(headGroup);
 
-      // Arms extending to handlebars
-      [-0.24, 0.24].forEach(armX => {
-        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.7, 6), matSkin);
-        arm.position.set(armX, 0.45, 0.3);
-        arm.rotation.x = -Math.PI / 3.2;
-        arm.rotation.z = armX > 0 ? -0.15 : 0.15;
-        torsoGroup.add(arm);
+      // Articulated Arms reaching down to handlebar grips
+      [-1, 1].forEach(side => {
+        const armGroup = new THREE.Group();
+        armGroup.position.set(side * 0.20, 0.44, 0.04);
+
+        const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.065, 0.15, 8), matShirt);
+        sleeve.position.set(0, -0.06, 0.02);
+        armGroup.add(sleeve);
+
+        armGroup.add(createTube([0, 0, 0], [side * 0.08, -0.30, 0.20], 0.05, matSkin));
+        armGroup.add(createTube([side * 0.08, -0.30, 0.20], [side * 0.14, -0.56, 0.65], 0.045, matSkin));
+
+        const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), matSkin);
+        hand.position.set(side * 0.14, -0.58, 0.67);
+        armGroup.add(hand);
+
+        torsoGroup.add(armGroup);
       });
 
       rider.add(torsoGroup);
 
-      // Legs / Thighs
+      // --- ARTICULATED LEGS (THIGH -> KNEE -> CALF -> SHOE) ---
+      const LEG_THIGH_LEN = 0.42;
+      const LEG_CALF_LEN = 0.42;
+
+      // Left Leg
       const leftLeg = new THREE.Group();
-      leftLeg.position.set(-0.18, 0, 0);
-      const leftThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.5, 6), matShorts);
-      leftThigh.position.set(0, -0.22, 0.1);
-      leftThigh.rotation.x = -0.4;
+      leftLeg.position.set(-0.15, -0.03, 0.02);
+
+      const leftThigh = new THREE.Group();
+      leftThigh.add(createTube([0, 0, 0], [0, -LEG_THIGH_LEN, 0], 0.06, matSkin));
+      const lShortsMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.075, 0.22, 8), matShorts);
+      lShortsMesh.position.set(0, -0.10, 0);
+      leftThigh.add(lShortsMesh);
       leftLeg.add(leftThigh);
+
+      const leftCalf = new THREE.Group();
+      leftCalf.position.set(0, -LEG_THIGH_LEN, 0);
+      leftCalf.add(createTube([0, 0, 0], [0, -LEG_CALF_LEN, 0], 0.05, matSkin));
+
+      const leftShoe = new THREE.Group();
+      leftShoe.position.set(0, -LEG_CALF_LEN, 0.04);
+      leftShoe.add(new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.035, 0.20), matShoeSole));
+      const lUpper = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.065, 0.17), matShoeUpper);
+      lUpper.position.set(0, 0.038, 0);
+      leftShoe.add(lUpper);
+      leftCalf.add(leftShoe);
+
+      leftThigh.add(leftCalf);
       rider.add(leftLeg);
 
+      // Right Leg
       const rightLeg = new THREE.Group();
-      rightLeg.position.set(0.18, 0, 0);
-      const rightThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.5, 6), matShorts);
-      rightThigh.position.set(0, -0.22, 0.1);
-      rightThigh.rotation.x = -0.4;
+      rightLeg.position.set(0.15, -0.03, 0.02);
+
+      const rightThigh = new THREE.Group();
+      rightThigh.add(createTube([0, 0, 0], [0, -LEG_THIGH_LEN, 0], 0.06, matSkin));
+      const rShortsMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.075, 0.22, 8), matShorts);
+      rShortsMesh.position.set(0, -0.10, 0);
+      rightThigh.add(rShortsMesh);
       rightLeg.add(rightThigh);
+
+      const rightCalf = new THREE.Group();
+      rightCalf.position.set(0, -LEG_THIGH_LEN, 0);
+      rightCalf.add(createTube([0, 0, 0], [0, -LEG_CALF_LEN, 0], 0.05, matSkin));
+
+      const rightShoe = new THREE.Group();
+      rightShoe.position.set(0, -LEG_CALF_LEN, 0.04);
+      rightShoe.add(new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.035, 0.20), matShoeSole));
+      const rUpper = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.065, 0.17), matShoeUpper);
+      rUpper.position.set(0, 0.038, 0);
+      rightShoe.add(rUpper);
+      rightCalf.add(rightShoe);
+
+      rightThigh.add(rightCalf);
       rider.add(rightLeg);
 
       root.add(rider);
 
       root.userData = {
         rearWheel,
-        frontFork,
+        frontForkGroup,
         frontWheel,
-        crank,
-        torsoGroup,
-        leftLeg,
-        rightLeg
+        cranksetGroup,
+        leftPedal,
+        rightPedal,
+        leftThigh,
+        leftCalf,
+        leftShoe,
+        rightThigh,
+        rightCalf,
+        rightShoe,
+        torsoGroup
       };
 
       return root;
@@ -1403,9 +1702,9 @@
 
     // Camera views offset configurations
     const cameraOffsets = [
-      { pos: new THREE.Vector3(0, 2.7, 5.5), look: new THREE.Vector3(0, 1.2, -6) }, // Classic Third-Person (from photo)
-      { pos: new THREE.Vector3(0, 1.9, 3.2), look: new THREE.Vector3(0, 1.1, -8) }, // Close Action
-      { pos: new THREE.Vector3(0, 1.5, 0.2), look: new THREE.Vector3(0, 1.2, -12) } // Handlebar View
+      { pos: new THREE.Vector3(0.35, 2.2, 4.6), look: new THREE.Vector3(0.0, 1.15, -7.5) }, // Classic Third-Person (from photo)
+      { pos: new THREE.Vector3(0, 1.8, 3.0), look: new THREE.Vector3(0, 1.05, -8) },        // Close Action
+      { pos: new THREE.Vector3(0, 1.35, 0.4), look: new THREE.Vector3(0, 1.15, -12) }       // Handlebar View
     ];
 
     // --- INPUT CONTROLS SYSTEM ---
@@ -1682,19 +1981,52 @@
       bike.rotation.z = gameState.leanAngle;
       bike.rotation.y = gameState.steer * 0.45;
 
-      // 4. Animate Bike Parts (Wheels spin, Pedals rotate, Rider legs pump)
+      // 4. Animate Bike Parts & Articulated Rider (Wheels, Crank, Steer, Legs IK)
       const wheelRotSpeed = (gameState.speed / 0.55) * delta;
       bike.userData.rearWheel.rotation.x -= wheelRotSpeed;
       bike.userData.frontWheel.rotation.x -= wheelRotSpeed;
-      bike.userData.crank.rotation.x -= wheelRotSpeed * 0.5;
 
-      // Steer front fork
-      bike.userData.frontFork.rotation.y = gameState.steer * 0.7;
+      // Crank angle advances
+      gameState.pedalAngle = (gameState.pedalAngle || 0) + wheelRotSpeed * 0.75;
+      bike.userData.cranksetGroup.rotation.x = -gameState.pedalAngle;
 
-      // Pumping legs animation
-      const pedalCycle = bike.position.z * 1.8;
-      bike.userData.leftLeg.rotation.x = Math.sin(pedalCycle) * 0.45;
-      bike.userData.rightLeg.rotation.x = Math.sin(pedalCycle + Math.PI) * 0.45;
+      // Keep pedals level with ground
+      bike.userData.leftPedal.rotation.x = gameState.pedalAngle;
+      bike.userData.rightPedal.rotation.x = gameState.pedalAngle;
+
+      // Steer front fork with handlebars
+      bike.userData.frontForkGroup.rotation.y = gameState.steer * 0.75;
+
+      // 2-Bone Analytical Inverse Kinematics (IK) for Pedaling Legs
+      const L1 = 0.42; // Thigh
+      const L2 = 0.42; // Calf / Shin
+      const hipY = 1.12, hipZ = -0.48;
+      const bbY = 0.52, bbZ = -0.35;
+      const R = 0.18;
+
+      function solveLegIK(pedalTheta, thighObj, calfObj, shoeObj, isLeft) {
+        const pY = bbY - Math.sin(pedalTheta) * R;
+        const pZ = bbZ + Math.cos(pedalTheta) * R;
+        const dy = pY - hipY;
+        const dz = pZ - hipZ;
+        const dist = Math.sqrt(dy * dy + dz * dz);
+        const cosKnee = Math.max(-0.99, Math.min(0.99, (L1 * L1 + L2 * L2 - dist * dist) / (2 * L1 * L2)));
+        const kneeAngle = Math.PI - Math.acos(cosKnee);
+        const baseAngle = Math.atan2(dz, -dy);
+        const thighAngle = baseAngle - (Math.PI - kneeAngle) / 2;
+
+        thighObj.rotation.x = thighAngle;
+        thighObj.rotation.z = isLeft ? 0.08 : -0.08;
+        calfObj.rotation.x = kneeAngle;
+        shoeObj.rotation.x = -thighAngle - kneeAngle;
+      }
+
+      solveLegIK(gameState.pedalAngle, bike.userData.leftThigh, bike.userData.leftCalf, bike.userData.leftShoe, true);
+      solveLegIK(gameState.pedalAngle + Math.PI, bike.userData.rightThigh, bike.userData.rightCalf, bike.userData.rightShoe, false);
+
+      // Subtle dynamic bobbing & sway of rider torso with pedaling
+      bike.userData.torsoGroup.position.y = 0.16 + Math.sin(gameState.pedalAngle * 2) * 0.015;
+      bike.userData.torsoGroup.rotation.z = Math.sin(gameState.pedalAngle) * 0.035;
 
       // 5. Infinite World Chunks Recycling
       chunks.forEach(chunk => {
